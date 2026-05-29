@@ -22,7 +22,7 @@ xcuserdata/
 .swiftpm/
 
 # Secrets
-Secrets.swift
+Cinema/Core/Network/Secrets.swift
 Secrets.plist
 *.env
 Config/Secrets.xcconfig

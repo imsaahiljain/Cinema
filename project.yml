@@ -1,0 +1,46 @@
+name: Cinema
+options:
+  bundleIdPrefix: com.mtgcardneeder
+  deploymentTarget:
+    iOS: "26.0"
+  defaultConfig: Debug
+  xcodeVersion: "26.5"
+
+settings:
+  base:
+    SWIFT_VERSION: 6.0
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+targets:
+  Cinema:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Cinema
+        excludes:
+          - "Resources/Preview Content"
+    resources:
+      - path: Cinema/Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mtgcardneeder.Cinema
+        INFOPLIST_FILE: Cinema/Resources/Info.plist
+        DEVELOPMENT_TEAM: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SWIFT_EMIT_LOC_STRINGS: YES
+    dependencies:
+      - package: Supabase
+    info:
+      path: Cinema/Resources/Info.plist
+      properties:
+        UILaunchScreen:
+          UIColorName: LaunchScreenBackground
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSPhotoLibraryUsageDescription: "Used to set your profile photo."
+
+packages:
+  Supabase:
+    url: https://github.com/supabase/supabase-swift
+    from: "2.5.0"
