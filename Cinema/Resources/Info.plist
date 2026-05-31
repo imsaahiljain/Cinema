@@ -18,6 +18,8 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Cinema uses your contacts to find friends already on the app.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Used to set your profile photo.</string>
 	<key>UILaunchScreen</key>

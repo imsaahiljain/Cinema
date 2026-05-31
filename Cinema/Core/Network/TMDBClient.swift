@@ -31,7 +31,7 @@ struct TMDBClient {
     func details(tmdbID: Int, mediaType: MediaType) async throws -> MediaItem {
         let path = mediaType == .movie ? "movie/\(tmdbID)" : "tv/\(tmdbID)"
         let result: TMDBResult = try await fetch(baseURL.appending(path: path))
-        guard let item = MediaItem(from: result) else {
+        guard let item = MediaItem(from: result, forcedType: mediaType) else {
             throw TMDBError.invalidResponse
         }
         return item

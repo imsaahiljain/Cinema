@@ -70,3 +70,41 @@ Cinema/
 - `DesignSystem/` exports a single `CinemaTheme` enum for colors/spacing
 - No comments unless the WHY is non-obvious
 - Commit after each working feature slice, not at end of session
+
+## Git Workflow (Claude must follow this)
+**Always commit working changes to GitHub.** Do not let sessions end with uncommitted code.
+
+Commit command pattern:
+```bash
+git add Cinema/ Docs/ Cinema.xcodeproj/xcshareddata/
+git commit -m "message"
+git push origin main
+```
+
+Never add: `supabase/` (local CLI artifacts), `Cinema.xcodeproj/xcuserdata/`, `.DS_Store`
+
+## Supabase Workflow (Claude must follow this)
+Never ask the user to touch the Supabase dashboard. Use the CLI:
+```bash
+echo "YOUR SQL;" | supabase db query --linked
+```
+Auth config changes via Management API:
+```bash
+curl -X PATCH https://api.supabase.com/v1/projects/anvgcmahgudiojnrfzku/config/auth \
+  -H "Authorization: Bearer $(cat ~/.supabase/access-token)" \
+  -H "Content-Type: application/json" \
+  -d '{...}'
+```
+The Supabase CLI is installed, authenticated, and the project is linked. Token is in memory.
+
+## Build & Run
+```bash
+# Build for device
+xcodebuild -scheme Cinema -project Cinema.xcodeproj -destination 'id=BBC55267-7020-5449-A572-EA4E1820A874' build
+
+# See the screen (iPhone Mirroring must be open)
+screencapture -x /tmp/screen.png
+
+# Click at coordinates (requires Accessibility permission for terminal)
+osascript -e 'tell application "System Events" to click at {x, y}'
+```

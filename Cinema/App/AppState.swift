@@ -2,10 +2,12 @@ import SwiftUI
 import Supabase
 
 @Observable
+@MainActor
 final class AppState {
     var currentUser: CinemaUser?
     var isAuthenticated = false
     var hasCompletedOnboarding = false
+    var showingOnboarding = false
 
     init() {
         Task { await checkSession() }
@@ -37,10 +39,24 @@ final class AppState {
         }
     }
 
+    func markOnboardingComplete() async {
+        guard let id = currentUser?.id else { return }
+        do {
+            try await SupabaseClient.shared.database
+                .from("users")
+                .update(["onboarded": true])
+                .eq("id", value: id)
+                .execute()
+            hasCompletedOnboarding = true
+            showingOnboarding = false
+        } catch {}
+    }
+
     func signOut() async {
         try? await SupabaseClient.shared.auth.signOut()
         currentUser = nil
         isAuthenticated = false
         hasCompletedOnboarding = false
+        showingOnboarding = false
     }
 }

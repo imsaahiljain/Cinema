@@ -121,6 +121,26 @@ create policy "Users can insert own feed events"
   on public.feed_events for insert with check (auth.uid() = user_id);
 
 -- ─────────────────────────────────────────────
+-- WATCHLIST
+-- Films the user wants to see but hasn't ranked yet
+-- ─────────────────────────────────────────────
+create table public.watchlist (
+  id          uuid default uuid_generate_v4() primary key,
+  user_id     uuid references public.users(id) on delete cascade not null,
+  tmdb_id     integer not null,
+  media_type  text not null check (media_type in ('movie', 'tv')),
+  added_at    timestamptz not null default now(),
+  unique (user_id, tmdb_id)
+);
+
+alter table public.watchlist enable row level security;
+
+create policy "Users can manage own watchlist"
+  on public.watchlist for all using (auth.uid() = user_id);
+
+create index on public.watchlist (user_id, added_at desc);
+
+-- ─────────────────────────────────────────────
 -- INDEXES
 -- ─────────────────────────────────────────────
 create index on public.ranked_items (user_id, elo_score desc);
