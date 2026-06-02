@@ -107,7 +107,7 @@ final class OnboardingViewModel {
         guard trimmed.count >= 3 else { usernameStatus = .idle; return }
         usernameStatus = .checking
         do {
-            let rows: [CinemaUser] = try await SupabaseClient.shared.database
+            let rows: [CinemaUser] = try await SupabaseClient.shared
                 .from("users").select().eq("username", value: trimmed).execute().value
             usernameStatus = rows.isEmpty ? .available : .taken
         } catch {
@@ -128,7 +128,7 @@ final class OnboardingViewModel {
             let user = authResponse.user
             let display = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
 
-            try await SupabaseClient.shared.database
+            try await SupabaseClient.shared
                 .from("users")
                 .insert([
                     "id": user.id.uuidString,
@@ -205,7 +205,7 @@ final class OnboardingViewModel {
             elo[m.winner] = w; elo[m.loser] = l
         }
         for (rank, entry) in elo.sorted(by: { $0.value > $1.value }).enumerated() {
-            try? await SupabaseClient.shared.database
+            try? await SupabaseClient.shared
                 .from("ranked_items")
                 .upsert(["user_id": userID.uuidString, "tmdb_id": String(entry.key),
                          "media_type": "movie", "elo_score": String(entry.value),

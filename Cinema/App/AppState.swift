@@ -25,7 +25,7 @@ final class AppState {
 
     private func loadUser(id: UUID) async {
         do {
-            let user: CinemaUser = try await SupabaseClient.shared.database
+            let user: CinemaUser = try await SupabaseClient.shared
                 .from("users")
                 .select()
                 .eq("id", value: id)
@@ -42,7 +42,7 @@ final class AppState {
     func markOnboardingComplete() async {
         guard let id = currentUser?.id else { return }
         do {
-            try await SupabaseClient.shared.database
+            try await SupabaseClient.shared
                 .from("users")
                 .update(["onboarded": true])
                 .eq("id", value: id)

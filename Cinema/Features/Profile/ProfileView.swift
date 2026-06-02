@@ -15,7 +15,7 @@ final class ProfileViewModel {
         guard let userID else { return }
         isLoading = topFilms.isEmpty
         do {
-            let items: [RankedItem] = try await SupabaseClient.shared.database
+            let items: [RankedItem] = try await SupabaseClient.shared
                 .from("ranked_items")
                 .select()
                 .eq("user_id", value: userID)
@@ -33,7 +33,7 @@ final class ProfileViewModel {
             }
             topFilms = loaded
 
-            let matches: [[String: String]] = try await SupabaseClient.shared.database
+            let matches: [[String: String]] = try await SupabaseClient.shared
                 .from("elo_matches")
                 .select("id")
                 .eq("user_id", value: userID)

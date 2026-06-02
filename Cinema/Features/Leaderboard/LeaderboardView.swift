@@ -26,7 +26,7 @@ final class WatchlistViewModel {
                     case mediaType = "media_type"
                 }
             }
-            let rows: [WatchlistRow] = try await SupabaseClient.shared.database
+            let rows: [WatchlistRow] = try await SupabaseClient.shared
                 .from("watchlist")
                 .select()
                 .eq("user_id", value: userID)
@@ -47,7 +47,7 @@ final class WatchlistViewModel {
     func remove(tmdbID: Int, userID: UUID?) async {
         guard let userID else { return }
         entries.removeAll { $0.id == tmdbID }
-        try? await SupabaseClient.shared.database
+        try? await SupabaseClient.shared
             .from("watchlist")
             .delete()
             .eq("user_id", value: userID)

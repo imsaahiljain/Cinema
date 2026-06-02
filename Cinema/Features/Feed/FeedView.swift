@@ -14,7 +14,7 @@ final class MyFilmsViewModel {
         guard let userID else { return }
         isLoading = rankedItems.isEmpty
         do {
-            let items: [RankedItem] = try await SupabaseClient.shared.database
+            let items: [RankedItem] = try await SupabaseClient.shared
                 .from("ranked_items")
                 .select()
                 .eq("user_id", value: userID)

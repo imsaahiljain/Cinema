@@ -18,7 +18,7 @@ final class RankingViewModel {
         guard let userID else { return }
         isLoading = currentPair == nil
         do {
-            let items: [RankedItem] = try await SupabaseClient.shared.database
+            let items: [RankedItem] = try await SupabaseClient.shared
                 .from("ranked_items")
                 .select()
                 .eq("user_id", value: userID)
@@ -96,7 +96,7 @@ final class RankingViewModel {
 
         do {
             // Upsert winner
-            try await SupabaseClient.shared.database
+            try await SupabaseClient.shared
                 .from("ranked_items")
                 .upsert([
                     "user_id": userID.uuidString,
@@ -107,7 +107,7 @@ final class RankingViewModel {
                 .execute()
 
             // Upsert loser
-            try await SupabaseClient.shared.database
+            try await SupabaseClient.shared
                 .from("ranked_items")
                 .upsert([
                     "user_id": userID.uuidString,
@@ -118,7 +118,7 @@ final class RankingViewModel {
                 .execute()
 
             // Log match
-            try await SupabaseClient.shared.database
+            try await SupabaseClient.shared
                 .from("elo_matches")
                 .insert([
                     "user_id": userID.uuidString,

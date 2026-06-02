@@ -46,7 +46,7 @@ final class SearchViewModel {
     func loadUserLists(userID: UUID?) async {
         guard let userID else { return }
         do {
-            let ranked: [RankedItem] = try await SupabaseClient.shared.database
+            let ranked: [RankedItem] = try await SupabaseClient.shared
                 .from("ranked_items")
                 .select()
                 .eq("user_id", value: userID)
@@ -60,7 +60,7 @@ final class SearchViewModel {
         guard let userID else { return }
         let startingElo = 1500.0
         do {
-            try await SupabaseClient.shared.database
+            try await SupabaseClient.shared
                 .from("ranked_items")
                 .upsert([
                     "user_id": userID.uuidString,
@@ -76,7 +76,7 @@ final class SearchViewModel {
     func addToWatchlist(item: MediaItem, userID: UUID?) async {
         guard let userID else { return }
         do {
-            try await SupabaseClient.shared.database
+            try await SupabaseClient.shared
                 .from("watchlist")
                 .upsert([
                     "user_id": userID.uuidString,
