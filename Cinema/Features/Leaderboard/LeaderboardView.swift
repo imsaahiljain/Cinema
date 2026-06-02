@@ -47,12 +47,16 @@ final class WatchlistViewModel {
     func remove(tmdbID: Int, userID: UUID?) async {
         guard let userID else { return }
         entries.removeAll { $0.id == tmdbID }
-        try? await SupabaseClient.shared
-            .from("watchlist")
-            .delete()
-            .eq("user_id", value: userID)
-            .eq("tmdb_id", value: tmdbID)
-            .execute()
+        do {
+            try await SupabaseClient.shared
+                .from("watchlist")
+                .delete()
+                .eq("user_id", value: userID)
+                .eq("tmdb_id", value: tmdbID)
+                .execute()
+        } catch {
+            Log.feed.error("watchlist remove: failed for tmdb_id=\(tmdbID) — \(error.localizedDescription)")
+        }
     }
 }
 

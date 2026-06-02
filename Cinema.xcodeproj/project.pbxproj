@@ -25,6 +25,7 @@
 		B0092C52AE699944D988F4F3 /* MediaItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB623A11E101E67864FA95BD /* MediaItem.swift */; };
 		EAEBD73332734E8C8697F037 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEDF737AB14A01612CDDBC73 /* MainTabView.swift */; };
 		F59F9E00678E8E9D5187B03E /* CinemaUser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5D65343706BC8CD34661074 /* CinemaUser.swift */; };
+		AA11BB22CC33DD44EE55FF66 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF6677AA /* Log.swift */; };
 		F83DEF400F2F1332CC8E640D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2897154F9235706C8E36A22 /* OnboardingView.swift */; };
 		FD58D6D5301ACC480E449A99 /* CinemaTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19B6FE300EFDFCFD23526BD3 /* CinemaTheme.swift */; };
 /* End PBXBuildFile section */
@@ -50,6 +51,7 @@
 		E94966236921CC6C34C05081 /* Cinema.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Cinema.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EB623A11E101E67864FA95BD /* MediaItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaItem.swift; sourceTree = "<group>"; };
 		FD02B3CF21F04A2669A89234 /* TMDBClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TMDBClient.swift; sourceTree = "<group>"; };
+		BB22CC33DD44EE55FF6677AA /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		FEDF737AB14A01612CDDBC73 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -221,6 +223,7 @@
 		F2DCCC94CBF09F44FF29A507 /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				BB22CC33DD44EE55FF6677AA /* Log.swift */,
 				540083680EE44913872C3AD6 /* Models */,
 				3A4B871A578D605C97A3B098 /* Network */,
 				18176E01F4C56545E769E094 /* Services */,
@@ -292,6 +295,7 @@
 				FD58D6D5301ACC480E449A99 /* CinemaTheme.swift in Sources */,
 				F59F9E00678E8E9D5187B03E /* CinemaUser.swift in Sources */,
 				0AA3EA0AD48B8314A5F4809B /* ELOService.swift in Sources */,
+				AA11BB22CC33DD44EE55FF66 /* Log.swift in Sources */,
 				9A9CFC8A976D1B49E20FD6F6 /* FeedView.swift in Sources */,
 				7C4CA3F23C3A5C425A37375D /* GlassCard.swift in Sources */,
 				544A035FB40C0037B07E26DE /* LeaderboardView.swift in Sources */,

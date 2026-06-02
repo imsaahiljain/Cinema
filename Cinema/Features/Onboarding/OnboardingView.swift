@@ -106,11 +106,14 @@ final class OnboardingViewModel {
         let trimmed = username.trimmingCharacters(in: .whitespaces).lowercased()
         guard trimmed.count >= 3 else { usernameStatus = .idle; return }
         usernameStatus = .checking
+        Log.onboarding.info("checkUsername: checking '@\(trimmed)'")
         do {
             let rows: [CinemaUser] = try await SupabaseClient.shared
                 .from("users").select().eq("username", value: trimmed).execute().value
             usernameStatus = rows.isEmpty ? .available : .taken
+            Log.onboarding.info("checkUsername: '@\(trimmed)' is \(self.usernameStatus == .available ? "available" : "taken")")
         } catch {
+            Log.onboarding.error("checkUsername: error — \(error.localizedDescription)")
             usernameStatus = .available
         }
     }
@@ -118,6 +121,7 @@ final class OnboardingViewModel {
     // Called from NotificationsStep — creates account then transitions to movie wall
     // Does NOT call appState.checkSession() to avoid RootView re-routing mid-onboarding.
     func createAccount(appState: AppState) async {
+        Log.onboarding.info("createAccount: starting signup for \(self.email)")
         isLoading = true
         error = nil
         do {
@@ -127,6 +131,7 @@ final class OnboardingViewModel {
             )
             let user = authResponse.user
             let display = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
+            Log.onboarding.info("createAccount: auth signup OK — uid=\(user.id)")
 
             try await SupabaseClient.shared
                 .from("users")
@@ -137,6 +142,7 @@ final class OnboardingViewModel {
                     "onboarded": "false",
                 ])
                 .execute()
+            Log.onboarding.info("createAccount: user row inserted — proceeding to movie wall")
 
             // Set auth state manually — avoids calling checkSession which would trigger
             // RootView to swap to OnboardingView(startAtMovieWall:true) mid-flow.
@@ -154,12 +160,14 @@ final class OnboardingViewModel {
             withAnimation { step = .movieWall }
             await loadWallFilms()
         } catch {
+            Log.onboarding.error("createAccount: failed — \(error.localizedDescription)")
             self.error = "Couldn't create account: \(error.localizedDescription)"
         }
         isLoading = false
     }
 
     func loadWallFilms() async {
+        Log.onboarding.info("loadWallFilms: fetching seed films")
         wallIsLoading = true
         var loaded: [MediaItem] = []
         for id in seedMovieIDs.shuffled() {
@@ -170,6 +178,7 @@ final class OnboardingViewModel {
         }
         wallFilms = loaded
         wallIsLoading = false
+        Log.onboarding.info("loadWallFilms: loaded \(loaded.count) films")
         pickNextWallPair()
     }
 
@@ -187,10 +196,12 @@ final class OnboardingViewModel {
         wallSeenIDs.insert(winner.id)
         wallSeenIDs.insert(loser.id)
         wallRankings.append((winner: winner.id, loser: loser.id))
+        Log.onboarding.info("wallChoose: '\(winner.title)' beat '\(loser.title)' — \(self.wallSeenIDs.count)/10 seen")
         if wallSeenIDs.count >= 10 {
             let wins = Dictionary(wallRankings.map { ($0.winner, 1) }, uniquingKeysWith: +)
             let topID = wins.max(by: { $0.value < $1.value })?.key
             topFilm = wallFilms.first { $0.id == topID } ?? wallFilms.first
+            Log.onboarding.info("wallChoose: wall complete — #1 film = '\(self.topFilm?.title ?? "none")'")
         } else {
             pickNextWallPair()
         }
@@ -198,6 +209,7 @@ final class OnboardingViewModel {
 
     func completeOnboarding(appState: AppState) async {
         guard let userID = appState.currentUser?.id else { return }
+        Log.onboarding.info("completeOnboarding: saving \(self.wallSeenIDs.count) ELO entries for \(userID)")
         isLoading = true
         var elo: [Int: Double] = Dictionary(uniqueKeysWithValues: wallSeenIDs.map { ($0, 1500.0) })
         for m in wallRankings {
@@ -205,13 +217,18 @@ final class OnboardingViewModel {
             elo[m.winner] = w; elo[m.loser] = l
         }
         for (rank, entry) in elo.sorted(by: { $0.value > $1.value }).enumerated() {
-            try? await SupabaseClient.shared
-                .from("ranked_items")
-                .upsert(["user_id": userID.uuidString, "tmdb_id": String(entry.key),
-                         "media_type": "movie", "elo_score": String(entry.value),
-                         "rank_position": String(rank + 1)])
-                .execute()
+            do {
+                try await SupabaseClient.shared
+                    .from("ranked_items")
+                    .upsert(["user_id": userID.uuidString, "tmdb_id": String(entry.key),
+                             "media_type": "movie", "elo_score": String(entry.value),
+                             "rank_position": String(rank + 1)])
+                    .execute()
+            } catch {
+                Log.onboarding.error("completeOnboarding: upsert failed for tmdb_id=\(entry.key) — \(error.localizedDescription)")
+            }
         }
+        Log.onboarding.info("completeOnboarding: all ranked_items upserted — marking complete")
         await appState.markOnboardingComplete()
         isLoading = false
     }
@@ -433,6 +450,7 @@ private struct PasswordStep: View {
     }
 }
 
+@MainActor
 private struct PhotoStep: View {
     @Bindable var vm: OnboardingViewModel
 
@@ -462,6 +480,8 @@ private struct PhotoStep: View {
                 Spacer()
 
                 // Photo picker — centered
+                // Capture on main actor before passing into the nonisolated ViewBuilder closure
+                let pickedImage = vm.profileUIImage
                 PhotosPicker(selection: $vm.selectedPhoto, matching: .images) {
                     ZStack {
                         Circle()
@@ -469,7 +489,7 @@ private struct PhotoStep: View {
                             .frame(width: 120, height: 120)
                             .overlay(Circle().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
 
-                        if let img = vm.profileUIImage {
+                        if let img = pickedImage {
                             Image(uiImage: img)
                                 .resizable().aspectRatio(contentMode: .fill)
                                 .frame(width: 120, height: 120).clipShape(Circle())
@@ -487,7 +507,7 @@ private struct PhotoStep: View {
                     }
                 }
                 .onChange(of: vm.selectedPhoto) { _, item in
-                    Task {
+                    Task { @MainActor in
                         if let data = try? await item?.loadTransferable(type: Data.self),
                            let img = UIImage(data: data) {
                             vm.profileUIImage = img
@@ -509,7 +529,7 @@ private struct PhotoStep: View {
                 Spacer()
 
                 // Continue only enabled once photo chosen
-                CinemaButton("Continue", enabled: vm.profileUIImage != nil) { vm.next() }
+                CinemaButton("Continue", enabled: pickedImage != nil) { vm.next() }
                     .padding(.horizontal, CinemaTheme.Spacing.lg)
                     .padding(.bottom, 48)
             }

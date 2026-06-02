@@ -13,13 +13,16 @@ final class AuthViewModel {
 
     func signIn(appState: AppState) async {
         guard !email.isEmpty, !password.isEmpty else { return }
+        Log.auth.info("signIn: attempting for \(self.email)")
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
         do {
             try await SupabaseClient.shared.auth.signIn(email: email, password: password)
+            Log.auth.info("signIn: success")
             await appState.checkSession()
         } catch {
+            Log.auth.error("signIn: failed — \(error.localizedDescription)")
             errorMessage = "Couldn't sign in. Check your email and password."
         }
     }
