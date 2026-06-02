@@ -42,6 +42,7 @@ struct AuthView: View {
     ]
 
     var body: some View {
+        GeometryReader { geo in
         ZStack {
             Color.black.ignoresSafeArea()
 
@@ -50,11 +51,11 @@ struct AuthView: View {
                 Text("Cinema")
                     .font(.system(size: 18, weight: .medium, design: .default))
                     .foregroundStyle(Color.white.opacity(0.5))
-                    .padding(.top, 64)
+                    .padding(.top, geo.safeAreaInsets.top + 24)
 
                 Spacer()
 
-                // Feature slides — no card container, direct on black
+                // Feature slides — height scales with screen, capped so it never dominates
                 TabView(selection: $page) {
                     ForEach(Array(features.enumerated()), id: \.offset) { i, f in
                         FeatureSlide(icon: f.icon, title: f.title, subtitle: f.subtitle)
@@ -62,7 +63,7 @@ struct AuthView: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(height: 300)
+                .frame(height: min(geo.size.height * 0.40, 340))
 
                 // Page dots
                 HStack(spacing: 8) {
@@ -98,12 +99,14 @@ struct AuthView: View {
                     }
                 }
                 .padding(.horizontal, 28)
-                .padding(.bottom, 52)
+                .padding(.bottom, max(geo.safeAreaInsets.bottom + 16, 52))
             }
         }
+        .ignoresSafeArea()
         .sheet(isPresented: $showLogin) {
             LoginView().environment(appState)
         }
+        } // GeometryReader
     }
 }
 
