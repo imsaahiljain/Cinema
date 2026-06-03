@@ -305,12 +305,12 @@ struct ProfileView: View {
         .padding(.bottom, 36)
     }
 
-    // MARK: - Film Fingerprint
+    // MARK: - Film Favorites
 
     private var filmFingerprintSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Film Fingerprint")
+                Text("Film Favorites")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(CinemaTheme.Colors.textPrimary)
                 Spacer()
@@ -453,7 +453,7 @@ struct SettingsView: View {
                                             .foregroundStyle(.white)
                                     }
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text("Film Fingerprint Preview")
+                                        Text("Film Favorites Preview")
                                             .font(.system(size: 16))
                                             .foregroundStyle(CinemaTheme.Colors.textPrimary)
                                         Text("Shows mock data — bypasses 25-film gate")

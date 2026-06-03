@@ -15,8 +15,9 @@ struct MediaItem: Identifiable, Hashable {
     let releaseYear: String?
     let voteAverage: Double?
     let genreNames: [String]
+    let runtime: Int?   // minutes for movies; first episodeRunTime entry for TV
 
-    // Search endpoint — has genreIds, no genres array
+    // Search endpoint — mediaType in result, genreIds (no genres object)
     init?(from result: TMDBResult) {
         guard let rawType = result.mediaType, let type_ = MediaType(rawValue: rawType),
               let title = result.title ?? result.name else { return nil }
@@ -29,14 +30,12 @@ struct MediaItem: Identifiable, Hashable {
         self.voteAverage = result.voteAverage
         let dateStr = result.releaseDate ?? result.firstAirDate ?? ""
         self.releaseYear = String(dateStr.prefix(4)).isEmpty ? nil : String(dateStr.prefix(4))
-        if let genres = result.genres {
-            self.genreNames = genres.map(\.name)
-        } else {
-            self.genreNames = (result.genreIds ?? []).compactMap { MediaItem.genreMap[$0] }
-        }
+        self.genreNames = result.genres.map { $0.map { $0.name } }
+            ?? (result.genreIds ?? []).compactMap { MediaItem.genreMap[$0] }
+        self.runtime = result.runtime ?? result.episodeRunTime?.first
     }
 
-    // Detail endpoint — mediaType passed explicitly, genres array in response
+    // Detail / discover endpoint — mediaType passed explicitly
     init?(from result: TMDBResult, forcedType: MediaType) {
         guard let title = result.title ?? result.name else { return nil }
         self.id = result.id
@@ -48,17 +47,15 @@ struct MediaItem: Identifiable, Hashable {
         self.voteAverage = result.voteAverage
         let dateStr = result.releaseDate ?? result.firstAirDate ?? ""
         self.releaseYear = String(dateStr.prefix(4)).isEmpty ? nil : String(dateStr.prefix(4))
-        if let genres = result.genres {
-            self.genreNames = genres.map(\.name)
-        } else {
-            self.genreNames = (result.genreIds ?? []).compactMap { MediaItem.genreMap[$0] }
-        }
+        self.genreNames = result.genres.map { $0.map { $0.name } }
+            ?? (result.genreIds ?? []).compactMap { MediaItem.genreMap[$0] }
+        self.runtime = result.runtime ?? result.episodeRunTime?.first
     }
 
-    // Manual init for cases where all data is already known
+    // Manual init
     init(id: Int, mediaType: MediaType, title: String, overview: String,
          posterPath: String?, backdropPath: String?, releaseYear: String?,
-         voteAverage: Double?, genreNames: [String] = []) {
+         voteAverage: Double?, genreNames: [String] = [], runtime: Int? = nil) {
         self.id = id
         self.mediaType = mediaType
         self.title = title
@@ -68,6 +65,14 @@ struct MediaItem: Identifiable, Hashable {
         self.releaseYear = releaseYear
         self.voteAverage = voteAverage
         self.genreNames = genreNames
+        self.runtime = runtime
+    }
+
+    var formattedRuntime: String? {
+        guard let r = runtime, r > 0 else { return nil }
+        let h = r / 60, m = r % 60
+        if h == 0 { return "\(m)m" }
+        return m == 0 ? "\(h)h" : "\(h)h \(m)m"
     }
 
     static let genreMap: [Int: String] = [

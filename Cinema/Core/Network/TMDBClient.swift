@@ -5,10 +5,12 @@ struct TMDBClient {
 
     private let baseURL = URL(string: "https://api.themoviedb.org/3")!
     private let imageBaseURL = "https://image.tmdb.org/t/p/w500"
+    private let backdropBaseURL = "https://image.tmdb.org/t/p/w1280"
+    private let profileBaseURL = "https://image.tmdb.org/t/p/w185"
 
-    func posterURL(path: String) -> URL? {
-        URL(string: imageBaseURL + path)
-    }
+    func posterURL(path: String) -> URL? { URL(string: imageBaseURL + path) }
+    func backdropURL(path: String) -> URL? { URL(string: backdropBaseURL + path) }
+    func profileImageURL(path: String) -> URL? { URL(string: profileBaseURL + path) }
 
     func search(query: String, page: Int = 1) async throws -> [MediaItem] {
         let url = baseURL
@@ -28,6 +30,23 @@ struct TMDBClient {
         return results.results.compactMap { MediaItem(from: $0) }
     }
 
+    func nowPlaying() async throws -> [MediaItem] {
+        let url = baseURL.appending(path: "movie/now_playing")
+        let results: TMDBSearchResponse = try await fetch(url)
+        return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }
+    }
+
+    func discover(genreID: Int) async throws -> [MediaItem] {
+        let url = baseURL
+            .appending(path: "discover/movie")
+            .appending(queryItems: [
+                .init(name: "with_genres", value: "\(genreID)"),
+                .init(name: "sort_by", value: "popularity.desc")
+            ])
+        let results: TMDBSearchResponse = try await fetch(url)
+        return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }
+    }
+
     func details(tmdbID: Int, mediaType: MediaType) async throws -> MediaItem {
         let path = mediaType == .movie ? "movie/\(tmdbID)" : "tv/\(tmdbID)"
         let result: TMDBResult = try await fetch(baseURL.appending(path: path))
@@ -40,6 +59,12 @@ struct TMDBClient {
     func credits(tmdbID: Int, mediaType: MediaType) async throws -> TMDBCredits {
         let path = mediaType == .movie ? "movie/\(tmdbID)/credits" : "tv/\(tmdbID)/credits"
         return try await fetch(baseURL.appending(path: path))
+    }
+
+    func reviews(tmdbID: Int, mediaType: MediaType) async throws -> [TMDBReview] {
+        let path = mediaType == .movie ? "movie/\(tmdbID)/reviews" : "tv/\(tmdbID)/reviews"
+        let response: TMDBReviewResponse = try await fetch(baseURL.appending(path: path))
+        return response.results
     }
 
     private func fetch<T: Decodable>(_ url: URL) async throws -> T {
@@ -67,7 +92,7 @@ extension JSONDecoder {
     }()
 }
 
-// MARK: - TMDB Response Types
+// MARK: - Response Types
 
 struct TMDBSearchResponse: Decodable {
     let results: [TMDBResult]
@@ -86,6 +111,8 @@ struct TMDBResult: Decodable {
     let voteAverage: Double?
     let genreIds: [Int]?
     let genres: [TMDBGenreItem]?
+    let runtime: Int?
+    let episodeRunTime: [Int]?
 }
 
 struct TMDBGenreItem: Decodable {
@@ -98,9 +125,27 @@ struct TMDBCredits: Decodable {
     let crew: [TMDBPerson]
 }
 
-struct TMDBPerson: Decodable {
+struct TMDBPerson: Identifiable, Decodable {
     let id: Int
     let name: String
     let job: String?
+    let character: String?
+    let profilePath: String?
     let order: Int?
+}
+
+struct TMDBReviewResponse: Decodable {
+    let results: [TMDBReview]
+}
+
+struct TMDBReview: Identifiable, Decodable {
+    let id: String
+    let author: String
+    let content: String
+    let authorDetails: TMDBAuthorDetails?
+
+    struct TMDBAuthorDetails: Decodable {
+        let rating: Double?
+        let avatarPath: String?
+    }
 }
