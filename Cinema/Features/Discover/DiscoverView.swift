@@ -147,7 +147,7 @@ struct DiscoverView: View {
                             .font(.system(size: 34, weight: .bold))
                             .foregroundStyle(CinemaTheme.Colors.textPrimary)
                             .padding(.horizontal, CinemaTheme.Spacing.lg)
-                            .padding(.top, 60)
+                            .padding(.top, 16)
 
                         // Top 10
                         if !vm.top10.isEmpty {
