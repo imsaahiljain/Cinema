@@ -37,6 +37,11 @@ struct TMDBClient {
         return item
     }
 
+    func credits(tmdbID: Int, mediaType: MediaType) async throws -> TMDBCredits {
+        let path = mediaType == .movie ? "movie/\(tmdbID)/credits" : "tv/\(tmdbID)/credits"
+        return try await fetch(baseURL.appending(path: path))
+    }
+
     private func fetch<T: Decodable>(_ url: URL) async throws -> T {
         var request = URLRequest(url: url)
         request.setValue("Bearer \(Secrets.tmdbReadAccessToken)", forHTTPHeaderField: "Authorization")
@@ -80,4 +85,22 @@ struct TMDBResult: Decodable {
     let firstAirDate: String?
     let voteAverage: Double?
     let genreIds: [Int]?
+    let genres: [TMDBGenreItem]?
+}
+
+struct TMDBGenreItem: Decodable {
+    let id: Int
+    let name: String
+}
+
+struct TMDBCredits: Decodable {
+    let cast: [TMDBPerson]
+    let crew: [TMDBPerson]
+}
+
+struct TMDBPerson: Decodable {
+    let id: Int
+    let name: String
+    let job: String?
+    let order: Int?
 }
