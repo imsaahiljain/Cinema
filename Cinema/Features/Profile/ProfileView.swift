@@ -7,6 +7,12 @@ struct TasteProfile {
     let topGenres: [String]
     let favoriteDirector: String?
     let favoriteActors: [String]
+
+    static let mock = TasteProfile(
+        topGenres: ["Drama", "Thriller", "Sci-Fi"],
+        favoriteDirector: "Christopher Nolan",
+        favoriteActors: ["Tom Hanks", "Cate Blanchett", "Timothée Chalamet"]
+    )
 }
 
 private struct FollowRecord: Decodable {
@@ -125,6 +131,8 @@ struct ProfileView: View {
     @State private var showShareCard = false
     @State private var showFollowers = false
     @State private var showFollowing = false
+    @State private var showSettings = false
+    @AppStorage("cinema_dev_fingerprint") private var devFingerprintUnlocked = false
 
     var body: some View {
         ZStack {
@@ -139,11 +147,26 @@ struct ProfileView: View {
                         socialStats
                         topFilmsSection
                         filmFingerprintSection
-                        signOutButton
                         Spacer().frame(height: 100)
                     }
                 }
                 .refreshable { await vm.load(userID: appState.currentUser?.id) }
+            }
+
+            // Settings gear — floats above scroll
+            VStack {
+                HStack {
+                    Spacer()
+                    Button { showSettings = true } label: {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 20, weight: .regular))
+                            .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .padding(.trailing, 10)
+                }
+                .padding(.top, 8)
+                Spacer()
             }
         }
         .task { await vm.load(userID: appState.currentUser?.id) }
@@ -155,6 +178,9 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showShareCard) {
             ShareCardView(films: vm.topFilms, user: appState.currentUser)
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView(appState: appState)
         }
     }
 
@@ -174,7 +200,7 @@ struct ProfileView: View {
                     .font(.system(size: 36, weight: .bold))
                     .foregroundStyle(CinemaTheme.Colors.textPrimary)
             }
-            .padding(.top, 56)
+            .padding(.top, 16)
 
             VStack(spacing: 5) {
                 Text(appState.currentUser?.displayName ?? appState.currentUser?.username ?? "")
@@ -288,7 +314,7 @@ struct ProfileView: View {
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(CinemaTheme.Colors.textPrimary)
                 Spacer()
-                if vm.rankedCount < 25 {
+                if !devFingerprintUnlocked && vm.rankedCount < 25 {
                     Text("\(vm.rankedCount) of 25")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(CinemaTheme.Colors.textSecondary)
@@ -297,7 +323,9 @@ struct ProfileView: View {
             .padding(.horizontal, CinemaTheme.Spacing.lg)
             .padding(.bottom, 16)
 
-            if vm.rankedCount < 25 {
+            if devFingerprintUnlocked {
+                unlockedFingerprintView(TasteProfile.mock)
+            } else if vm.rankedCount < 25 {
                 lockedFingerprintView
             } else if vm.isTasteProfileLoading {
                 HStack {
@@ -378,18 +406,175 @@ struct ProfileView: View {
         .padding(.horizontal, CinemaTheme.Spacing.lg)
     }
 
-    // MARK: - Sign Out
+}
 
-    private var signOutButton: some View {
-        Button {
-            Task { await appState.signOut() }
-        } label: {
-            Text("Sign Out")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.red.opacity(0.75))
+// MARK: - Settings
+
+struct SettingsView: View {
+    let appState: AppState
+    @AppStorage("cinema_dev_fingerprint") private var devFingerprintUnlocked = false
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                CinemaTheme.Colors.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 28) {
+
+                        // Account
+                        SettingsSection(title: "Account") {
+                            SettingsRow(icon: "key.fill", iconColor: CinemaTheme.Colors.gold, label: "Change Password", note: "Coming soon", disabled: true) {}
+                            Divider().background(CinemaTheme.Colors.border).padding(.leading, 52)
+                            SettingsRow(icon: "bell.fill", iconColor: .blue, label: "Notifications", note: "Coming soon", disabled: true) {}
+                        }
+
+                        // Developer — pre-production only
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 6) {
+                                Text("DEVELOPER")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                                Text("· pre-production only")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.5))
+                            }
+                            .padding(.horizontal, CinemaTheme.Spacing.lg)
+
+                            VStack(spacing: 0) {
+                                HStack(spacing: 14) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 7)
+                                            .fill(Color.purple)
+                                            .frame(width: 32, height: 32)
+                                        Image(systemName: "wand.and.stars")
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundStyle(.white)
+                                    }
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Film Fingerprint Preview")
+                                            .font(.system(size: 16))
+                                            .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                                        Text("Shows mock data — bypasses 25-film gate")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                                    }
+                                    Spacer()
+                                    Toggle("", isOn: $devFingerprintUnlocked)
+                                        .tint(CinemaTheme.Colors.gold)
+                                        .labelsHidden()
+                                }
+                                .padding(.horizontal, CinemaTheme.Spacing.lg)
+                                .padding(.vertical, 12)
+                            }
+                            .background(CinemaTheme.Colors.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
+                            .overlay(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md)
+                                .strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
+                            .padding(.horizontal, CinemaTheme.Spacing.lg)
+                        }
+
+                        // Sign Out
+                        VStack(spacing: 0) {
+                            Button {
+                                Task { await appState.signOut() }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                                        .font(.system(size: 16))
+                                    Text("Sign Out")
+                                        .font(.system(size: 16))
+                                    Spacer()
+                                }
+                                .foregroundStyle(.red.opacity(0.85))
+                                .padding(.horizontal, CinemaTheme.Spacing.lg)
+                                .padding(.vertical, 16)
+                            }
+                        }
+                        .background(CinemaTheme.Colors.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
+                        .overlay(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md)
+                            .strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
+                        .padding(.horizontal, CinemaTheme.Spacing.lg)
+
+                        Spacer().frame(height: 40)
+                    }
+                    .padding(.top, 20)
+                }
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .foregroundStyle(CinemaTheme.Colors.gold)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, CinemaTheme.Spacing.lg)
+    }
+}
+
+private struct SettingsSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                .padding(.horizontal, CinemaTheme.Spacing.lg)
+
+            VStack(spacing: 0) {
+                content()
+            }
+            .background(CinemaTheme.Colors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
+            .overlay(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md)
+                .strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
+            .padding(.horizontal, CinemaTheme.Spacing.lg)
+        }
+    }
+}
+
+private struct SettingsRow: View {
+    let icon: String
+    let iconColor: Color
+    let label: String
+    var note: String? = nil
+    var disabled: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: disabled ? {} : action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(disabled ? iconColor.opacity(0.35) : iconColor)
+                        .frame(width: 32, height: 32)
+                    Image(systemName: icon)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white.opacity(disabled ? 0.5 : 1))
+                }
+                Text(label)
+                    .font(.system(size: 16))
+                    .foregroundStyle(disabled ? CinemaTheme.Colors.textSecondary : CinemaTheme.Colors.textPrimary)
+                Spacer()
+                if let note {
+                    Text(note)
+                        .font(.system(size: 13))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.6))
+                } else if !disabled {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(CinemaTheme.Colors.border)
+                }
+            }
+            .padding(.horizontal, CinemaTheme.Spacing.lg)
+            .padding(.vertical, 14)
+        }
+        .disabled(disabled)
     }
 }
 
