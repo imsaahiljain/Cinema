@@ -252,7 +252,7 @@ private struct Top10Card: View {
     // 1-9: number centered in 72pt frame, poster at x=44  (restored original)
     // 10:  "1" in 48pt + "0" in 48pt, poster at x=68 so "1" is 100% prominent
     //      and "0" peeks the same way single digits peek behind their poster
-    private var posterX: CGFloat { index == 9 ? 68 : 44 }
+    private var posterX: CGFloat { index == 9 ? 84 : 44 }
 
     var body: some View {
         Button(action: action) {
