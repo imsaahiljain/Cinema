@@ -16,17 +16,14 @@ struct TMDBClient {
 
     // MARK: - Discovery
 
-    func trending(mediaType: String = "all", timeWindow: String = "week", englishOnly: Bool = false) async throws -> [MediaItem] {
+    func trending(mediaType: String = "all", timeWindow: String = "week") async throws -> [MediaItem] {
         let url = baseURL.appending(path: "trending/\(mediaType)/\(timeWindow)")
         let results: TMDBSearchResponse = try await fetch(url)
-        let items = results.results.compactMap { MediaItem(from: $0) }
-        return englishOnly ? items.filter { $0.originalLanguage == "en" } : items
+        return results.results.compactMap { MediaItem(from: $0) }
     }
 
     func nowPlaying() async throws -> [MediaItem] {
-        let url = baseURL
-            .appending(path: "movie/now_playing")
-            .appending(queryItems: [.init(name: "with_original_language", value: "en"), .init(name: "language", value: "en-US")])
+        let url = baseURL.appending(path: "movie/now_playing")
         let results: TMDBSearchResponse = try await fetch(url)
         return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }
     }
@@ -36,9 +33,7 @@ struct TMDBClient {
             .appending(path: "discover/movie")
             .appending(queryItems: [
                 .init(name: "with_genres", value: "\(genreID)"),
-                .init(name: "sort_by", value: "popularity.desc"),
-                .init(name: "with_original_language", value: "en"),
-                .init(name: "language", value: "en-US")
+                .init(name: "sort_by", value: "popularity.desc")
             ])
         let results: TMDBSearchResponse = try await fetch(url)
         return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }
@@ -50,9 +45,7 @@ struct TMDBClient {
             .appending(queryItems: [
                 .init(name: "sort_by", value: "vote_average.desc"),
                 .init(name: "vote_count.gte", value: "1000"),
-                .init(name: "vote_average.gte", value: "8.0"),
-                .init(name: "with_original_language", value: "en"),
-                .init(name: "language", value: "en-US")
+                .init(name: "vote_average.gte", value: "8.0")
             ])
         let results: TMDBSearchResponse = try await fetch(url)
         return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }
@@ -64,9 +57,7 @@ struct TMDBClient {
             .appending(queryItems: [
                 .init(name: "sort_by", value: "vote_count.desc"),
                 .init(name: "vote_count.gte", value: "2000"),
-                .init(name: "vote_average.gte", value: "8.0"),
-                .init(name: "with_original_language", value: "en"),
-                .init(name: "language", value: "en-US")
+                .init(name: "vote_average.gte", value: "8.0")
             ])
         let results: TMDBSearchResponse = try await fetch(url)
         return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }
@@ -78,9 +69,7 @@ struct TMDBClient {
             .appending(queryItems: [
                 .init(name: "with_watch_providers", value: "\(providerID)"),
                 .init(name: "watch_region", value: "US"),
-                .init(name: "sort_by", value: "popularity.desc"),
-                .init(name: "with_original_language", value: "en"),
-                .init(name: "language", value: "en-US")
+                .init(name: "sort_by", value: "popularity.desc")
             ])
         let results: TMDBSearchResponse = try await fetch(url)
         return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }

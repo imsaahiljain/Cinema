@@ -8,7 +8,13 @@ struct FriendTake: Identifiable {
     let displayName: String
     let username: String
     let rankPosition: Int?
-    let eloScore: Double
+    let totalRanked: Int
+
+    // Linear scale: #1 of N = 10.0, #N of N = 0.0
+    var ratingOutOf10: Double? {
+        guard let pos = rankPosition, totalRanked > 1 else { return rankPosition == 1 ? 10.0 : nil }
+        return max(0, (1.0 - Double(pos - 1) / Double(totalRanked - 1)) * 10.0)
+    }
 }
 
 // MARK: - ViewModel
@@ -59,11 +65,22 @@ final class MovieInfoViewModel {
             .execute().value else { return [] }
 
         let profileMap = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
-        return items.compactMap { item in
-            guard let user = profileMap[item.userID] else { return nil }
-            return FriendTake(id: item.userID, displayName: user.displayName ?? user.username,
-                              username: user.username, rankPosition: item.rankPosition, eloScore: item.eloScore)
+        struct JustID: Decodable { let id: UUID }
+        var takes: [FriendTake] = []
+        for item in items {
+            guard let user = profileMap[item.userID] else { continue }
+            let allItems: [JustID] = (try? await SupabaseClient.shared
+                .from("ranked_items").select("id").eq("user_id", value: item.userID)
+                .execute().value) ?? []
+            takes.append(FriendTake(
+                id: item.userID,
+                displayName: user.displayName ?? user.username,
+                username: user.username,
+                rankPosition: item.rankPosition,
+                totalRanked: allItems.count
+            ))
         }
+        return takes
     }
 }
 
@@ -333,23 +350,21 @@ struct MovieInfoView: View {
                             }
                         }
                         Spacer()
-                        eloStars(take.eloScore)
+                        if let rating = take.ratingOutOf10 {
+                            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                                Text(String(format: "%.1f", rating))
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                                Text("/ 10")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                            }
+                        }
                     }
                     .padding(12)
                     .background(CinemaTheme.Colors.surface)
                     .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.sm))
                 }
-            }
-        }
-    }
-
-    private func eloStars(_ elo: Double) -> some View {
-        let stars = min(5, max(1, Int((elo - 800) / 160) + 1))
-        return HStack(spacing: 2) {
-            ForEach(0..<5) { i in
-                Image(systemName: i < stars ? "star.fill" : "star")
-                    .font(.system(size: 10))
-                    .foregroundStyle(i < stars ? CinemaTheme.Colors.gold : CinemaTheme.Colors.border)
             }
         }
     }

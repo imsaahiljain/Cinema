@@ -16,7 +16,6 @@ final class DiscoverViewModel {
     var platformRows: [(title: String, films: [MediaItem])] = []
     var watchlistFilms: [MediaItem] = []
     var recommendations: [MediaItem] = []
-    var becauseYouWatched: (title: String, films: [MediaItem])?
     var isLoading = false
 
     private var likedGenreIDs: [Int] {
@@ -30,7 +29,7 @@ final class DiscoverViewModel {
 
     func load(currentUserID: UUID?) async {
         isLoading = top10.isEmpty
-        top10 = (try? await TMDBClient.shared.trending(mediaType: "movie", englishOnly: true)) ?? []
+        top10 = (try? await TMDBClient.shared.trending(mediaType: "movie")) ?? []
         newReleases = (try? await TMDBClient.shared.nowPlaying()) ?? []
         isLoading = false
 
@@ -80,7 +79,7 @@ final class DiscoverViewModel {
             .execute().value) ?? []
         followingCount = edges.count
 
-        guard followingCount >= 20 else { return }
+        guard followingCount >= 10 else { return }
         let ids = edges.map(\.followingID)
         guard let recent: [RankedItem] = try? await SupabaseClient.shared
             .from("ranked_items").select()
@@ -124,15 +123,6 @@ final class DiscoverViewModel {
            let best = topItem.first {
             recommendations = (try? await TMDBClient.shared.recommendations(tmdbID: best.tmdbID, mediaType: best.mediaType)) ?? []
 
-            // Most-recently added film → because you watched
-            if let recentItems: [RankedItem] = try? await SupabaseClient.shared
-                .from("ranked_items").select().eq("user_id", value: userID)
-                .order("added_at", ascending: false).limit(1).execute().value,
-               let recent = recentItems.first, recent.tmdbID != best.tmdbID,
-               let recentMedia = try? await TMDBClient.shared.details(tmdbID: recent.tmdbID, mediaType: recent.mediaType) {
-                let recs = (try? await TMDBClient.shared.recommendations(tmdbID: recent.tmdbID, mediaType: recent.mediaType)) ?? []
-                if !recs.isEmpty { becauseYouWatched = (recentMedia.title, recs) }
-            }
         }
     }
 }
@@ -171,11 +161,6 @@ struct DiscoverView: View {
 
                         // Friends (gated at 20 following)
                         friendsSection
-
-                        // Because You Watched
-                        if let byw = vm.becauseYouWatched, !byw.films.isEmpty {
-                            MediaRow(title: "Because You Watched \(byw.title)", films: byw.films) { selectedFilm = $0 }
-                        }
 
                         // Recommendations
                         if !vm.recommendations.isEmpty {
@@ -243,7 +228,7 @@ struct DiscoverView: View {
 
     @ViewBuilder
     private var friendsSection: some View {
-        if vm.followingCount >= 20 {
+        if vm.followingCount >= 10 {
             if !vm.friendActivity.isEmpty {
                 MediaRow(title: "Watched by Friends", films: vm.friendActivity) { selectedFilm = $0 }
             }
@@ -263,24 +248,45 @@ private struct Top10Card: View {
 
     private let posterW: CGFloat = 110
     private let posterH: CGFloat = 165
-    private let peek: CGFloat = 50   // left area where number shows
+
+    // 1-9: number centered in 72pt frame, poster at x=44  (restored original)
+    // 10:  "1" in 48pt + "0" in 48pt, poster at x=68 so "1" is 100% prominent
+    //      and "0" peeks the same way single digits peek behind their poster
+    private var posterX: CGFloat { index == 9 ? 68 : 44 }
 
     var body: some View {
         Button(action: action) {
             ZStack(alignment: .bottomLeading) {
-                Text("\(index + 1)")
-                    .font(.system(size: 100, weight: .black).italic())
-                    .foregroundStyle(CinemaTheme.Colors.background)
-                    .stroke(color: Color.white.opacity(0.25), width: 2)
-                    .offset(y: 8)
+                if index == 9 {
+                    HStack(spacing: 0) {
+                        digit("1").frame(width: 48, alignment: .center)
+                        digit("0").frame(width: 48, alignment: .center)
+                    }
+                    .offset(y: 12)
+                } else {
+                    digit("\(index + 1)")
+                        .frame(width: 72, alignment: .center)
+                        .offset(y: 12)
+                }
 
                 PosterImage(path: film.posterPath, cornerRadius: CinemaTheme.Radius.sm)
                     .frame(width: posterW, height: posterH)
-                    .offset(x: peek)
+                    .offset(x: posterX)
             }
-            .frame(width: peek + posterW, height: posterH + 8, alignment: .bottomLeading)
+            .frame(width: posterX + posterW, height: posterH + 12, alignment: .bottomLeading)
         }
         .buttonStyle(.plain)
+    }
+
+    private func digit(_ s: String) -> some View {
+        Text(s)
+            .font(.system(size: 96, weight: .black).italic())
+            .foregroundStyle(CinemaTheme.Colors.surface)
+            .overlay(
+                Text(s)
+                    .font(.system(size: 96, weight: .black).italic())
+                    .stroke(color: CinemaTheme.Colors.textSecondary.opacity(0.5), width: 1)
+            )
     }
 }
 
@@ -301,7 +307,7 @@ private struct LockedFriendsPanel: View {
                     .font(.system(size: 28))
                     .foregroundStyle(CinemaTheme.Colors.textSecondary)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Follow \(20 - followingCount) more people to unlock")
+                    Text("Follow \(10 - followingCount) more people to unlock")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(CinemaTheme.Colors.textPrimary)
                     Text("See what your friends are watching and ranking.")
