@@ -15,9 +15,9 @@ struct MediaItem: Identifiable, Hashable {
     let releaseYear: String?
     let voteAverage: Double?
     let genreNames: [String]
-    let runtime: Int?   // minutes for movies; first episodeRunTime entry for TV
+    let runtime: Int?
+    let originalLanguage: String?
 
-    // Search endpoint — mediaType in result, genreIds (no genres object)
     init?(from result: TMDBResult) {
         guard let rawType = result.mediaType, let type_ = MediaType(rawValue: rawType),
               let title = result.title ?? result.name else { return nil }
@@ -30,12 +30,12 @@ struct MediaItem: Identifiable, Hashable {
         self.voteAverage = result.voteAverage
         let dateStr = result.releaseDate ?? result.firstAirDate ?? ""
         self.releaseYear = String(dateStr.prefix(4)).isEmpty ? nil : String(dateStr.prefix(4))
-        self.genreNames = result.genres.map { $0.map { $0.name } }
+        self.genreNames = result.genres.map { g in g.map { $0.name } }
             ?? (result.genreIds ?? []).compactMap { MediaItem.genreMap[$0] }
         self.runtime = result.runtime ?? result.episodeRunTime?.first
+        self.originalLanguage = result.originalLanguage
     }
 
-    // Detail / discover endpoint — mediaType passed explicitly
     init?(from result: TMDBResult, forcedType: MediaType) {
         guard let title = result.title ?? result.name else { return nil }
         self.id = result.id
@@ -47,25 +47,21 @@ struct MediaItem: Identifiable, Hashable {
         self.voteAverage = result.voteAverage
         let dateStr = result.releaseDate ?? result.firstAirDate ?? ""
         self.releaseYear = String(dateStr.prefix(4)).isEmpty ? nil : String(dateStr.prefix(4))
-        self.genreNames = result.genres.map { $0.map { $0.name } }
+        self.genreNames = result.genres.map { g in g.map { $0.name } }
             ?? (result.genreIds ?? []).compactMap { MediaItem.genreMap[$0] }
         self.runtime = result.runtime ?? result.episodeRunTime?.first
+        self.originalLanguage = result.originalLanguage
     }
 
-    // Manual init
     init(id: Int, mediaType: MediaType, title: String, overview: String,
          posterPath: String?, backdropPath: String?, releaseYear: String?,
-         voteAverage: Double?, genreNames: [String] = [], runtime: Int? = nil) {
-        self.id = id
-        self.mediaType = mediaType
-        self.title = title
-        self.overview = overview
-        self.posterPath = posterPath
-        self.backdropPath = backdropPath
-        self.releaseYear = releaseYear
-        self.voteAverage = voteAverage
-        self.genreNames = genreNames
-        self.runtime = runtime
+         voteAverage: Double?, genreNames: [String] = [], runtime: Int? = nil,
+         originalLanguage: String? = nil) {
+        self.id = id; self.mediaType = mediaType; self.title = title
+        self.overview = overview; self.posterPath = posterPath
+        self.backdropPath = backdropPath; self.releaseYear = releaseYear
+        self.voteAverage = voteAverage; self.genreNames = genreNames
+        self.runtime = runtime; self.originalLanguage = originalLanguage
     }
 
     var formattedRuntime: String? {

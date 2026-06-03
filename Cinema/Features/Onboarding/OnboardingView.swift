@@ -229,6 +229,8 @@ final class OnboardingViewModel {
             }
         }
         Log.onboarding.info("completeOnboarding: all ranked_items upserted — marking complete")
+        UserDefaults.standard.set(likedGenres.map(String.init).joined(separator: ","), forKey: "cinema_liked_genres")
+        UserDefaults.standard.set(dislikedGenres.map(String.init).joined(separator: ","), forKey: "cinema_disliked_genres")
         await appState.markOnboardingComplete()
         isLoading = false
     }
