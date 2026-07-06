@@ -17,18 +17,27 @@ final class SearchViewModel {
     var addedIDs: Set<Int> = []
     var watchlistIDs: Set<Int> = []
     var followedIDs: Set<UUID> = []
+    var selectedGenreID: Int? = nil
+    var genreResults: [MediaItem] = []
+    var isBrowsingGenre = false
+
+    let quickGenres: [(id: Int, name: String)] = [
+        (28, "Action"), (18, "Drama"), (35, "Comedy"), (53, "Thriller"),
+        (878, "Sci-Fi"), (27, "Horror"), (10749, "Romance"), (16, "Animation"),
+        (80, "Crime"), (99, "Documentary")
+    ]
+
+    var isQueryEmpty: Bool { query.trimmingCharacters(in: .whitespaces).isEmpty }
 
     private var searchTask: Task<Void, Never>?
 
     func onQueryChange() {
         searchTask?.cancel()
-        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
-            results = []
-            peopleResults = []
-            return
-        }
+        selectedGenreID = nil
+        genreResults = []
+        guard !isQueryEmpty else { results = []; peopleResults = []; return }
         searchTask = Task {
-            try? await Task.sleep(for: .milliseconds(350))
+            try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
             await search()
         }
@@ -45,14 +54,19 @@ final class SearchViewModel {
         isSearching = false
     }
 
+    func browseGenre(id: Int) async {
+        if selectedGenreID == id { selectedGenreID = nil; genreResults = []; return }
+        selectedGenreID = id
+        isBrowsingGenre = true
+        genreResults = (try? await TMDBClient.shared.discover(genreID: id)) ?? []
+        isBrowsingGenre = false
+    }
+
     private func searchPeople(_ q: String) async -> [CinemaUser] {
         (try? await SupabaseClient.shared
-            .from("users")
-            .select()
+            .from("users").select()
             .ilike("username", pattern: "%\(q.lowercased())%")
-            .limit(20)
-            .execute()
-            .value) ?? []
+            .limit(20).execute().value) ?? []
     }
 
     func loadTrending() async {
@@ -62,36 +76,27 @@ final class SearchViewModel {
 
     func loadUserLists(userID: UUID?) async {
         guard let userID else { return }
-
         do {
             let ranked: [RankedItem] = try await SupabaseClient.shared
-                .from("ranked_items").select()
-                .eq("user_id", value: userID)
-                .execute().value
+                .from("ranked_items").select().eq("user_id", value: userID).execute().value
             addedIDs = Set(ranked.map { $0.tmdbID })
         } catch {}
-
         do {
-            struct WatchlistRow: Decodable {
+            struct WL: Decodable {
                 let tmdbID: Int
                 enum CodingKeys: String, CodingKey { case tmdbID = "tmdb_id" }
             }
-            let wl: [WatchlistRow] = try await SupabaseClient.shared
-                .from("watchlist").select("tmdb_id")
-                .eq("user_id", value: userID)
-                .execute().value
+            let wl: [WL] = try await SupabaseClient.shared
+                .from("watchlist").select("tmdb_id").eq("user_id", value: userID).execute().value
             watchlistIDs = Set(wl.map { $0.tmdbID })
         } catch {}
-
         do {
-            struct FollowEdge: Decodable {
+            struct FE: Decodable {
                 let followingID: UUID
                 enum CodingKeys: String, CodingKey { case followingID = "following_id" }
             }
-            let edges: [FollowEdge] = try await SupabaseClient.shared
-                .from("follows").select("following_id")
-                .eq("follower_id", value: userID)
-                .execute().value
+            let edges: [FE] = try await SupabaseClient.shared
+                .from("follows").select("following_id").eq("follower_id", value: userID).execute().value
             followedIDs = Set(edges.map { $0.followingID })
         } catch {}
     }
@@ -99,14 +104,9 @@ final class SearchViewModel {
     func addToRanked(item: MediaItem, userID: UUID?) async {
         guard let userID else { return }
         do {
-            try await SupabaseClient.shared
-                .from("ranked_items")
-                .upsert([
-                    "user_id": userID.uuidString,
-                    "tmdb_id": String(item.id),
-                    "media_type": item.mediaType.rawValue,
-                    "elo_score": String(1500.0),
-                ])
+            try await SupabaseClient.shared.from("ranked_items")
+                .upsert(["user_id": userID.uuidString, "tmdb_id": String(item.id),
+                         "media_type": item.mediaType.rawValue, "elo_score": String(1500.0)])
                 .execute()
             addedIDs.insert(item.id)
         } catch {}
@@ -115,13 +115,9 @@ final class SearchViewModel {
     func addToWatchlist(item: MediaItem, userID: UUID?) async {
         guard let userID else { return }
         do {
-            try await SupabaseClient.shared
-                .from("watchlist")
-                .upsert([
-                    "user_id": userID.uuidString,
-                    "tmdb_id": String(item.id),
-                    "media_type": item.mediaType.rawValue,
-                ])
+            try await SupabaseClient.shared.from("watchlist")
+                .upsert(["user_id": userID.uuidString, "tmdb_id": String(item.id),
+                         "media_type": item.mediaType.rawValue])
                 .execute()
             watchlistIDs.insert(item.id)
         } catch {}
@@ -131,22 +127,15 @@ final class SearchViewModel {
         guard let currentUserID else { return }
         if followedIDs.contains(user.id) {
             do {
-                try await SupabaseClient.shared
-                    .from("follows")
-                    .delete()
+                try await SupabaseClient.shared.from("follows").delete()
                     .eq("follower_id", value: currentUserID.uuidString)
-                    .eq("following_id", value: user.id.uuidString)
-                    .execute()
+                    .eq("following_id", value: user.id.uuidString).execute()
                 followedIDs.remove(user.id)
             } catch {}
         } else {
             do {
-                try await SupabaseClient.shared
-                    .from("follows")
-                    .upsert([
-                        "follower_id": currentUserID.uuidString,
-                        "following_id": user.id.uuidString,
-                    ])
+                try await SupabaseClient.shared.from("follows")
+                    .upsert(["follower_id": currentUserID.uuidString, "following_id": user.id.uuidString])
                     .execute()
                 followedIDs.insert(user.id)
             } catch {}
@@ -163,8 +152,9 @@ struct SearchView: View {
     @State private var selectedFilm: MediaItem?
     @State private var selectedUser: CinemaUser?
 
-    private var isQueryEmpty: Bool {
-        vm.query.trimmingCharacters(in: .whitespaces).isEmpty
+    private var sectionTitle: String {
+        guard let id = vm.selectedGenreID else { return "Trending" }
+        return vm.quickGenres.first { $0.id == id }?.name ?? "Trending"
     }
 
     var body: some View {
@@ -173,25 +163,21 @@ struct SearchView: View {
 
             VStack(spacing: 0) {
                 searchBar
-                    .padding(.horizontal, CinemaTheme.Spacing.lg)
-                    .padding(.top, 60)
-                    .padding(.bottom, 12)
-
-                if !isQueryEmpty {
-                    segmentControl
-                        .padding(.bottom, 2)
-                }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 14)
 
                 if vm.isSearching {
                     Spacer()
                     ProgressView().tint(CinemaTheme.Colors.gold)
                     Spacer()
-                } else if isQueryEmpty {
-                    trendingGrid
-                } else if vm.segment == .films {
-                    filmResults
+                } else if vm.isQueryEmpty {
+                    idleContent
                 } else {
-                    peopleResults
+                    segmentControl
+                    Divider().background(CinemaTheme.Colors.border)
+                    if vm.segment == .films { filmResults }
+                    else { peopleResults }
                 }
             }
         }
@@ -199,9 +185,7 @@ struct SearchView: View {
             await vm.loadTrending()
             await vm.loadUserLists(userID: appState.currentUser?.id)
         }
-        .sheet(item: $selectedFilm) { film in
-            MovieInfoView(film: film)
-        }
+        .sheet(item: $selectedFilm) { MovieInfoView(film: $0) }
         .sheet(item: $selectedUser) { user in
             NavigationStack {
                 UserProfileView(user: user)
@@ -220,29 +204,51 @@ struct SearchView: View {
     private var searchBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 16))
-                .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(
+                    searchFocused || !vm.query.isEmpty
+                        ? CinemaTheme.Colors.textPrimary
+                        : CinemaTheme.Colors.textSecondary
+                )
+                .animation(.easeInOut(duration: 0.15), value: searchFocused)
+
             TextField("Films, shows, people...", text: $vm.query)
+                .font(.system(size: 16))
                 .foregroundStyle(CinemaTheme.Colors.textPrimary)
                 .tint(CinemaTheme.Colors.gold)
                 .focused($searchFocused)
                 .onChange(of: vm.query) { _, _ in vm.onQueryChange() }
+                .submitLabel(.search)
+
             if !vm.query.isEmpty {
                 Button {
                     vm.query = ""
                     vm.results = []
                     vm.peopleResults = []
+                    vm.selectedGenreID = nil
+                    vm.genreResults = []
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
+                        .font(.system(size: 15))
                         .foregroundStyle(CinemaTheme.Colors.textSecondary)
                 }
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
         .background(CinemaTheme.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(
+                    searchFocused
+                        ? CinemaTheme.Colors.gold.opacity(0.5)
+                        : CinemaTheme.Colors.border,
+                    lineWidth: 1
+                )
+                .animation(.easeInOut(duration: 0.2), value: searchFocused)
+        )
     }
 
     // MARK: - Segment Control
@@ -250,17 +256,20 @@ struct SearchView: View {
     private var segmentControl: some View {
         HStack(spacing: 0) {
             segmentTab("Films & TV", isSelected: vm.segment == .films) { vm.segment = .films }
-            segmentTab("People", isSelected: vm.segment == .people) { vm.segment = .people }
+            segmentTab("People",     isSelected: vm.segment == .people) { vm.segment = .people }
         }
-        .padding(.horizontal, CinemaTheme.Spacing.lg)
+        .padding(.horizontal, 20)
     }
 
     private func segmentTab(_ label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(spacing: 9) {
                 Text(label)
                     .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? CinemaTheme.Colors.textPrimary : CinemaTheme.Colors.textSecondary)
+                    .foregroundStyle(
+                        isSelected ? CinemaTheme.Colors.textPrimary : CinemaTheme.Colors.textSecondary
+                    )
+                    .padding(.top, 4)
                 Rectangle()
                     .fill(isSelected ? CinemaTheme.Colors.gold : Color.clear)
                     .frame(height: 2)
@@ -270,39 +279,92 @@ struct SearchView: View {
         .animation(.spring(duration: 0.2), value: isSelected)
     }
 
-    // MARK: - Trending Grid (idle state)
+    // MARK: - Idle Content
 
-    private var trendingGrid: some View {
+    private var idleContent: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Trending")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                    .textCase(.uppercase)
-                    .kerning(0.5)
-                    .padding(.horizontal, CinemaTheme.Spacing.lg)
-                    .padding(.top, 4)
+            VStack(alignment: .leading, spacing: 0) {
+                genreChips
+                    .padding(.bottom, 28)
 
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 3),
-                        GridItem(.flexible(), spacing: 3),
-                        GridItem(.flexible(), spacing: 3),
-                    ],
-                    spacing: 3
-                ) {
-                    ForEach(vm.trending.prefix(18)) { film in
-                        Button { selectedFilm = film } label: {
-                            PosterImage(path: film.posterPath, cornerRadius: 0)
-                                .aspectRatio(2/3, contentMode: .fit)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                HStack {
+                    Text(sectionTitle)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                        .textCase(.uppercase)
+                        .kerning(0.8)
+                        .animation(.easeInOut(duration: 0.2), value: sectionTitle)
+                    Spacer()
                 }
-                .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
-                .padding(.horizontal, CinemaTheme.Spacing.lg)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
 
-                Spacer().frame(height: 80)
+                if vm.isBrowsingGenre {
+                    HStack {
+                        Spacer()
+                        ProgressView().tint(CinemaTheme.Colors.gold)
+                        Spacer()
+                    }
+                    .padding(.vertical, 60)
+                } else {
+                    posterGrid(vm.selectedGenreID != nil ? vm.genreResults : vm.trending)
+                }
+
+                Spacer().frame(height: 100)
+            }
+            .padding(.top, 4)
+        }
+        .scrollDismissesKeyboard(.immediately)
+    }
+
+    // MARK: - Genre Chips
+
+    private var genreChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(vm.quickGenres, id: \.id) { genre in
+                    let selected = vm.selectedGenreID == genre.id
+                    Button {
+                        Task { await vm.browseGenre(id: genre.id) }
+                    } label: {
+                        Text(genre.name)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(selected ? .black : CinemaTheme.Colors.textPrimary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 9)
+                            .background(selected ? CinemaTheme.Colors.gold : CinemaTheme.Colors.surface)
+                            .clipShape(Capsule())
+                            .overlay(
+                                Capsule().strokeBorder(
+                                    selected ? CinemaTheme.Colors.gold : CinemaTheme.Colors.border,
+                                    lineWidth: 1
+                                )
+                            )
+                    }
+                    .animation(.spring(duration: 0.2), value: selected)
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    // MARK: - Poster Grid (edge-to-edge)
+
+    private func posterGrid(_ items: [MediaItem]) -> some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: 2),
+                GridItem(.flexible(), spacing: 2),
+                GridItem(.flexible(), spacing: 2),
+            ],
+            spacing: 2
+        ) {
+            ForEach(items.prefix(18)) { film in
+                Button { selectedFilm = film } label: {
+                    PosterImage(path: film.posterPath, cornerRadius: 0)
+                        .aspectRatio(2/3, contentMode: .fit)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -312,16 +374,12 @@ struct SearchView: View {
     @ViewBuilder
     private var filmResults: some View {
         if vm.results.isEmpty {
-            Spacer()
-            Text("No results for \"\(vm.query)\"")
-                .font(.system(size: 15))
-                .foregroundStyle(CinemaTheme.Colors.textSecondary)
-            Spacer()
+            emptyState(icon: "film", message: "No results for \"\(vm.query)\"")
         } else {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 0) {
                     ForEach(vm.results) { item in
-                        SearchResultRow(
+                        FilmResultRow(
                             item: item,
                             isAdded: vm.addedIDs.contains(item.id),
                             isWatchlisted: vm.watchlistIDs.contains(item.id),
@@ -331,11 +389,12 @@ struct SearchView: View {
                         )
                         Divider()
                             .background(CinemaTheme.Colors.border)
-                            .padding(.leading, 76)
+                            .padding(.leading, 90)
                     }
                 }
                 .padding(.bottom, 100)
             }
+            .scrollDismissesKeyboard(.immediately)
         }
     }
 
@@ -344,11 +403,7 @@ struct SearchView: View {
     @ViewBuilder
     private var peopleResults: some View {
         if vm.peopleResults.isEmpty {
-            Spacer()
-            Text("No people found for \"\(vm.query)\"")
-                .font(.system(size: 15))
-                .foregroundStyle(CinemaTheme.Colors.textSecondary)
-            Spacer()
+            emptyState(icon: "person", message: "No one found for \"\(vm.query)\"")
         } else {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 0) {
@@ -362,18 +417,36 @@ struct SearchView: View {
                         )
                         Divider()
                             .background(CinemaTheme.Colors.border)
-                            .padding(.leading, 72)
+                            .padding(.leading, 78)
                     }
                 }
                 .padding(.bottom, 100)
             }
+            .scrollDismissesKeyboard(.immediately)
+        }
+    }
+
+    // MARK: - Empty State
+
+    private func emptyState(icon: String, message: String) -> some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: icon)
+                .font(.system(size: 36, weight: .ultraLight))
+                .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.35))
+            Text(message)
+                .font(.system(size: 15))
+                .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            Spacer()
         }
     }
 }
 
-// MARK: - Search Result Row
+// MARK: - Film Result Row
 
-private struct SearchResultRow: View {
+private struct FilmResultRow: View {
     let item: MediaItem
     let isAdded: Bool
     let isWatchlisted: Bool
@@ -384,49 +457,58 @@ private struct SearchResultRow: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 14) {
-                PosterImage(path: item.posterPath, cornerRadius: CinemaTheme.Radius.sm)
-                    .frame(width: 44, height: 66)
+                PosterImage(path: item.posterPath, cornerRadius: 8)
+                    .frame(width: 56, height: 84)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(item.title)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(CinemaTheme.Colors.textPrimary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
-                    HStack(spacing: 8) {
+                    HStack(spacing: 5) {
                         if let year = item.releaseYear {
                             Text(year)
                                 .font(.system(size: 13))
                                 .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                            Text("·")
+                                .font(.system(size: 13))
+                                .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.4))
                         }
                         Text(item.mediaType == .movie ? "Film" : "TV")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: 13))
                             .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(CinemaTheme.Colors.surface)
-                            .clipShape(Capsule())
+                        if let genre = item.genreNames.first {
+                            Text("·")
+                                .font(.system(size: 13))
+                                .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.4))
+                            Text(genre)
+                                .font(.system(size: 13))
+                                .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                        }
                     }
                 }
 
-                Spacer()
+                Spacer(minLength: 8)
 
-                HStack(spacing: 10) {
+                HStack(spacing: 14) {
                     Button(action: onWatchlist) {
                         Image(systemName: isWatchlisted ? "bookmark.fill" : "bookmark")
-                            .font(.system(size: 18))
-                            .foregroundStyle(isWatchlisted ? CinemaTheme.Colors.gold : CinemaTheme.Colors.textSecondary)
+                            .font(.system(size: 17))
+                            .foregroundStyle(
+                                isWatchlisted ? CinemaTheme.Colors.gold : CinemaTheme.Colors.textSecondary
+                            )
                     }
                     Button(action: onAdd) {
                         Image(systemName: isAdded ? "checkmark.circle.fill" : "plus.circle")
-                            .font(.system(size: 24))
-                            .foregroundStyle(isAdded ? .green : CinemaTheme.Colors.gold)
+                            .font(.system(size: 26))
+                            .foregroundStyle(isAdded ? Color.green : CinemaTheme.Colors.gold)
                     }
                 }
             }
-            .padding(.horizontal, CinemaTheme.Spacing.lg)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -448,11 +530,10 @@ private struct PeopleResultRow: View {
                 ZStack {
                     Circle()
                         .fill(CinemaTheme.Colors.surface)
-                        .frame(width: 44, height: 44)
+                        .frame(width: 46, height: 46)
                         .overlay(Circle().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
-                    Text(user.displayName?.prefix(1).uppercased()
-                         ?? user.username.prefix(1).uppercased())
-                        .font(.system(size: 18, weight: .bold))
+                    Text((user.displayName ?? user.username).prefix(1).uppercased())
+                        .font(.system(size: 19, weight: .bold))
                         .foregroundStyle(CinemaTheme.Colors.textPrimary)
                 }
 
@@ -472,8 +553,8 @@ private struct PeopleResultRow: View {
                         Text(isFollowing ? "Following" : "Follow")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(isFollowing ? CinemaTheme.Colors.textSecondary : .black)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 7)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
                             .background(isFollowing ? CinemaTheme.Colors.surface : CinemaTheme.Colors.gold)
                             .clipShape(Capsule())
                             .overlay(
@@ -486,8 +567,8 @@ private struct PeopleResultRow: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, CinemaTheme.Spacing.lg)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 13)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
