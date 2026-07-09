@@ -2,7 +2,8 @@
 
 ## Open Action Items (things only the user can do — check this whenever asked "any action items left?")
 - **Apple Developer Team ID** — not set (`DEVELOPMENT_TEAM: ""` in `project.yml`). Not blocking simulator work, but required before any physical-device build or TestFlight. Get it from Xcode → Settings → Accounts, or developer.apple.com → Membership Details.
-- **Supabase Personal Access Token and/or `service_role` key** — not held. Not currently blocking anything (all data-level work goes through the anon key + REST API), but needed the moment a real schema change or auth-config change comes up. From supabase.com/dashboard/account/tokens (PAT) and the project's Settings → API (`service_role` key).
+- ~~Supabase Personal Access Token~~ — done, saved at `~/.supabase/access-token` (outside the repo, never committed). Verified working against `api.supabase.com/v1/projects`.
+- **Supabase `service_role` key** — still not held. Only needed for admin-level data operations that bypass Row Level Security; the PAT above covers schema/project-config changes. From the project's Settings → API in the Supabase dashboard, if it ever comes up.
 
 ## What This Is
 Cinema is a high-velocity social media app for movie/TV taste. Think Beli for restaurants, but for film. Users rank media via pairwise ELO ("This or That"), build a ranked list, and share taste with friends via a social feed.
@@ -83,10 +84,11 @@ If it's missing, the app will not compile (`Secrets.supabaseURL` etc. won't reso
 
 ## Development Setup
 1. Xcode 26+ required (iOS 26 target for `.glassEffect()`)
-2. **No Node.js, npm, or Homebrew needed for anything in this project.** The app itself is pure SwiftUI/SPM. Tooling (XcodeBuildMCP, ios-simulator-mcp, etc.) is unnecessary — everything below is driven directly through `xcodebuild`/`xcrun simctl`/XCUITest, which ship with Xcode. Don't register those MCP servers; if asked to, explain this instead.
-3. Simulator is the default target for day-to-day work (no Apple Developer Team needed — `DEVELOPMENT_TEAM: ""` and unsigned builds work fine for `platform=iOS Simulator` destinations). Physical-device builds need a real Team ID in `project.yml`, which hasn't been set up yet — ask the user for it (Xcode → Settings → Accounts, or developer.apple.com → Membership) only when device testing actually becomes necessary.
-4. Supabase: schema already applied to the live project (`Docs/schema.sql` is the source of truth if it ever needs reapplying). The project can get **paused** on the free tier — if API calls start failing with DNS/connection errors, that's the first thing to check; the user has to click "Restore" in the Supabase dashboard, it doesn't self-resume.
-5. `git remote` uses SSH (`git@github.com:imsaahiljain/Cinema.git`), not HTTPS — an SSH key is already set up and added to the GitHub account. If push ever fails with a credential error on a new machine, generate a new `ed25519` key and have the user add it at github.com/settings/ssh/new.
+2. **No Node.js, npm, or Homebrew needed for anything in this project.** The app itself is pure SwiftUI/SPM. Tooling (XcodeBuildMCP, ios-simulator-mcp, etc.) is unnecessary — everything below is driven directly through `xcodebuild`/`xcrun simctl`/XCUITest, which ship with Xcode. Don't register those MCP servers; if asked to, explain this instead. When a CLI tool genuinely is needed (`xcodegen`, `gh`), fetch the prebuilt macOS binary from its GitHub releases directly rather than installing Homebrew for it — both already live at `~/.local/bin/`, which is on `PATH`.
+3. **`gh` (GitHub CLI) is installed** at `~/.local/bin/gh` but not authenticated — nothing in the current workflow needs it (commits push straight to `main`, no PR/issue workflow). Run `gh auth login` only if that changes.
+4. Simulator is the default target for day-to-day work (no Apple Developer Team needed — `DEVELOPMENT_TEAM: ""` and unsigned builds work fine for `platform=iOS Simulator` destinations). Physical-device builds need a real Team ID in `project.yml`, which hasn't been set up yet — ask the user for it (Xcode → Settings → Accounts, or developer.apple.com → Membership) only when device testing actually becomes necessary.
+5. Supabase: schema already applied to the live project (`Docs/schema.sql` is the source of truth if it ever needs reapplying). The project can get **paused** on the free tier — if API calls start failing with DNS/connection errors, that's the first thing to check; the user has to click "Restore" in the Supabase dashboard, it doesn't self-resume. A Personal Access Token for the Management API is saved at `~/.supabase/access-token`.
+6. `git remote` uses SSH (`git@github.com:imsaahiljain/Cinema.git`), not HTTPS — an SSH key is already set up and added to the GitHub account. If push ever fails with a credential error on a new machine, generate a new `ed25519` key and have the user add it at github.com/settings/ssh/new.
 
 ## Coding Conventions
 - One `@Observable` ViewModel per feature screen
@@ -121,7 +123,12 @@ curl -s -X POST "$SUPABASE_URL/auth/v1/signup" -H "apikey: $ANON_KEY" \
 ```
 This is much faster than driving the full 12-step onboarding flow (with real Contacts/Notifications system permission dialogs) through the UI just to get a usable account — see the UI Testing section below.
 
-**Schema/project-admin work (DDL changes, auth config)** — needs a Supabase Personal Access Token (from supabase.com/dashboard/account/tokens) and/or the project's `service_role` key (Settings → API), neither of which this session has by default. Ask the user for them when actually needed; don't assume they're available.
+**Schema/project-admin work (DDL changes, auth config)** — use the Supabase Management API with the Personal Access Token stored at `~/.supabase/access-token` (outside the repo, gitignored-equivalent — never commit it):
+```bash
+curl -s "https://api.supabase.com/v1/projects/anvgcmahgudiojnrfzku/..." \
+  -H "Authorization: Bearer $(cat ~/.supabase/access-token)"
+```
+The project's `service_role` key (bypasses Row Level Security for admin-level *data* operations, separate from the PAT which is for project/account-level management) is not held — ask the user for it (Settings → API in the dashboard) if that specific need comes up.
 
 ## Building, Running & Verifying (Claude must follow this)
 
