@@ -111,6 +111,7 @@ If it's missing, the app will not compile (`Secrets.supabaseURL` etc. won't reso
 - `DesignSystem/` exports a single `CinemaTheme` enum for colors/spacing
 - No comments unless the WHY is non-obvious
 - Commit after each working feature slice, not at end of session
+- **Search for existing components/screens before building new ones.** This project has more built out than a fresh grep suggests — e.g. `PosterImage` (`Cinema/DesignSystem/GlassCard.swift`), `MovieInfoView` (a full movie-detail screen already wired from Search/Discover), and the rank→rating formula (`ratingOutOf10` in `MovieInfoViewModel.FriendTake`, `Cinema/Features/Discover/MovieInfoView.swift`) all already existed and were nearly rebuilt from scratch during the Feed work. Grep for the concept before writing new UI or logic.
 - **No hardcoded pixel/point dimensions for layout.** Sizes tuned by eyeballing one simulator/device look "right" there and wrong on every other screen size. Use `GeometryReader`/proportional sizing (fractions of available width/height), `.safeAreaInset`/safe-area-relative spacing instead of a guessed padding constant, and Dynamic Type-aware fonts (`.font(.system(.body, ...))` / relative scaling) rather than fixed point sizes, so screens scale correctly across the full iPhone size range, not just whichever one was open at the time. Flagged directly after a bucket-of-popcorn Feed prototype was hardcoded to one screen size (fixed `232pt` container height, `58pt` kernel size) and looked wrong as a result.
 
 ## Git Workflow (Claude must follow this)
@@ -149,6 +150,8 @@ The project's `service_role` key (bypasses Row Level Security for admin-level *d
 
 The project is driven entirely through `xcodebuild` / `xcrun simctl` / XCUITest — no XcodeBuildMCP, no ios-simulator-mcp, no Node. All commands below run straight in Bash.
 
+**Never report a visual/UI change as done without actually looking at a screenshot yourself first.** Build → install → launch → screenshot → Read the PNG → fix what's visibly wrong → only then tell the user it's ready. Describing a change instead of verifying it (or installing straight to the user's physical device without a simulator look first) has produced real, embarrassing bugs that a screenshot would have caught immediately (a broken layout rendering off-screen, cropped images, mismatched colors) — each one cost several rounds of back-and-forth to diagnose and fix. The simulator loop is fast; use it before every device install, not instead of one.
+
 **Regenerate the Xcode project when Swift files are added, moved, or removed.** `Cinema.xcodeproj` uses explicit file references (not Xcode 16's auto-sync folders), so new files are invisible to the build until regenerated:
 ```bash
 xcodegen generate --spec project.yml   # xcodegen is on PATH at ~/.local/bin/xcodegen
@@ -160,6 +163,8 @@ unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen_install
 mkdir -p ~/.local/bin && cp /tmp/xcodegen_install/xcodegen/bin/xcodegen ~/.local/bin/xcodegen
 ```
 Known gotcha: xcodegen silently re-adds `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` as a default even if omitted from `project.yml` — since no `AppIcon` asset set exists yet, this breaks the build. `project.yml` explicitly sets it to `""` to blank it out; don't remove that line until a real app icon asset is added.
+
+**Known gotcha, more important: `xcodegen generate` regenerates `Cinema/Resources/Info.plist` from `project.yml`'s `targets.Cinema.info.properties` block on *every single run*.** Hand-editing `Info.plist` directly (adding a key, changing a string like `NSContactsUsageDescription`) works until the next `xcodegen generate`, which silently reverts it back to whatever `project.yml` says. Always make Info.plist changes in `project.yml`'s `info.properties`, never in the `.plist` file directly. This cost real time twice in one session: once discovering the gotcha itself, and again because a fix made on a feature branch didn't get carried back to `main` and silently reverted there too the next time `main`'s `project.yml` was regenerated from.
 
 **Build for the simulator:**
 ```bash
