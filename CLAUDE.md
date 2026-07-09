@@ -111,6 +111,7 @@ If it's missing, the app will not compile (`Secrets.supabaseURL` etc. won't reso
 - `DesignSystem/` exports a single `CinemaTheme` enum for colors/spacing
 - No comments unless the WHY is non-obvious
 - Commit after each working feature slice, not at end of session
+- **No hardcoded pixel/point dimensions for layout.** Sizes tuned by eyeballing one simulator/device look "right" there and wrong on every other screen size. Use `GeometryReader`/proportional sizing (fractions of available width/height), `.safeAreaInset`/safe-area-relative spacing instead of a guessed padding constant, and Dynamic Type-aware fonts (`.font(.system(.body, ...))` / relative scaling) rather than fixed point sizes, so screens scale correctly across the full iPhone size range, not just whichever one was open at the time. Flagged directly after a bucket-of-popcorn Feed prototype was hardcoded to one screen size (fixed `232pt` container height, `58pt` kernel size) and looked wrong as a result.
 
 ## Git Workflow (Claude must follow this)
 **Always commit working changes to GitHub.** Do not let sessions end with uncommitted code.
