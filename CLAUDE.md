@@ -1,9 +1,18 @@
 # Cinema — CLAUDE.md
 
+## Notes File
+`NOTES.md` in this repo is a running scratchpad of freeform notes-to-self. Whenever the user says "note to self," append what they said (verbatim, with today's date) to `NOTES.md` — don't editorialize or fold it into this file. Check `NOTES.md` when asked what notes exist.
+
 ## Open Action Items (things only the user can do — check this whenever asked "any action items left?")
-- **Apple Developer Team ID** — not set (`DEVELOPMENT_TEAM: ""` in `project.yml`). Not blocking simulator work, but required before any physical-device build or TestFlight. Get it from Xcode → Settings → Accounts, or developer.apple.com → Membership Details.
+- ~~Apple Developer Team ID~~ — done. User's Xcode account has a free Personal Team, `PXH52A4CBY` ("Saahil Jain (Personal Team)"), now set as `DEVELOPMENT_TEAM` in `project.yml` with `CODE_SIGN_STYLE: Automatic`. Physical device (Saahil Jain's iPhone, an iPhone 17,5) is paired and shows up in both `xcrun devicectl list devices` and `xcrun xctrace list devices`. Personal Team signing means installed builds need re-signing every 7 days — if a device build stops launching after a week of inactivity, that's why; just rebuild and reinstall.
 - ~~Supabase Personal Access Token~~ — done, saved at `~/.supabase/access-token` (outside the repo, never committed). Verified working against `api.supabase.com/v1/projects`.
 - **Supabase `service_role` key** — still not held. Only needed for admin-level data operations that bypass Row Level Security; the PAT above covers schema/project-config changes. From the project's Settings → API in the Supabase dashboard, if it ever comes up.
+
+## Post-Production Backlog (polish/features to come back to later — not blocking current work)
+- **Multiple winning animations for This or That** — once the rebuilt ranking screen has one good "you picked this one" animation, add several more and rotate/randomize between them so the screen feels dynamic rather than repeating the same transition every battle. First candidate already saved: `Cinema/Features/Ranking/WinEffects/DiagonalOverarchWinEffect.swift` (winner slides diagonally across and overarches the loser) — built during the swipe-prototype pass, needs minor tweaking but is ready to become one of several selectable variants rather than rebuilt from scratch.
+- **Separate onboarding variant of This or That** — the 10-Movie Wall needs its own version of the ranking screen with an added "I haven't watched one of these" button. Tapping it changes the top prompt to ask which film the user *has* seen (put that phrasing in the question area at the top) and requires tapping the poster of the one they've watched, rather than a normal pairwise pick.
+- **Decision-time-weighted ranking algorithm** — go beyond fixed-K ELO (K=32) by also factoring in how long the user took to decide (fast pick = high confidence = bigger rating swing, long hesitation = low confidence = smaller swing) plus other behavioral signals, closer to how Glicko/TrueSkill model rating confidence rather than plain ELO. Separate work from the visual/gesture rebuild — touches `ELOService` and `RankingViewModel.selectPair`/`choose`.
+- **Custom sound effects for This or That** — swipe/commit/win moments should eventually have short custom SFX (not generic iOS system sounds) to match the haptic feedback. Needs either sourcing a few licensed/royalty-free short clips or synthesizing simple tones in-app; punt until the swipe + haptics interaction itself is built and feels right.
 
 ## What This Is
 Cinema is a high-velocity social media app for movie/TV taste. Think Beli for restaurants, but for film. Users rank media via pairwise ELO ("This or That"), build a ranked list, and share taste with friends via a social feed.

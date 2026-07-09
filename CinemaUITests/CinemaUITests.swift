@@ -46,4 +46,13 @@ final class CinemaUITests: XCTestCase {
         app.buttons["Numbered List"].tap()
         pause()
     }
+
+    func testSwipeCommitsPick() throws {
+        XCTAssertTrue(app.staticTexts["0"].waitForExistence(timeout: 5))
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: end)
+        XCTAssertTrue(app.staticTexts["1"].waitForExistence(timeout: 5))
+        pause()
+    }
 }

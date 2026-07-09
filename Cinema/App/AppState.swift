@@ -28,9 +28,31 @@ final class AppState {
             await loadUser(id: session.user.id)
         } catch {
             Log.app.info("checkSession: no active session — \(error.localizedDescription)")
+            #if DEBUG
+            await debugAutoSignIn()
+            #else
+            isAuthenticated = false
+            #endif
+        }
+    }
+
+    #if DEBUG
+    // Skips the login/onboarding wall during development so a fresh install
+    // doesn't require re-authenticating every time — compiled out entirely
+    // in Release, so this never reaches a real build.
+    private func debugAutoSignIn() async {
+        do {
+            try await SupabaseClient.shared.auth.signIn(email: "qatest1@example.com", password: "TestPass123")
+            let session = try await SupabaseClient.shared.auth.session
+            isAuthenticated = true
+            await loadUser(id: session.user.id)
+            Log.app.info("checkSession: DEBUG auto-signed into QA account")
+        } catch {
+            Log.app.error("checkSession: DEBUG auto sign-in failed — \(error.localizedDescription)")
             isAuthenticated = false
         }
     }
+    #endif
 
     private func loadUser(id: UUID) async {
         Log.app.info("loadUser: fetching profile for \(id)")

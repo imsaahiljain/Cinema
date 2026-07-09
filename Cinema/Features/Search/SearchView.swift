@@ -151,6 +151,7 @@ struct SearchView: View {
     @FocusState private var searchFocused: Bool
     @State private var selectedFilm: MediaItem?
     @State private var selectedUser: CinemaUser?
+    @State private var showRanking = false
 
     private var sectionTitle: String {
         guard let id = vm.selectedGenreID else { return "Trending" }
@@ -186,6 +187,7 @@ struct SearchView: View {
             await vm.loadUserLists(userID: appState.currentUser?.id)
         }
         .sheet(item: $selectedFilm) { MovieInfoView(film: $0) }
+        .fullScreenCover(isPresented: $showRanking) { RankingView() }
         .sheet(item: $selectedUser) { user in
             NavigationStack {
                 UserProfileView(user: user)
@@ -384,7 +386,13 @@ struct SearchView: View {
                             isAdded: vm.addedIDs.contains(item.id),
                             isWatchlisted: vm.watchlistIDs.contains(item.id),
                             onTap: { selectedFilm = item },
-                            onAdd: { Task { await vm.addToRanked(item: item, userID: appState.currentUser?.id) } },
+                            onAdd: {
+                                Task {
+                                    let alreadyAdded = vm.addedIDs.contains(item.id)
+                                    await vm.addToRanked(item: item, userID: appState.currentUser?.id)
+                                    if !alreadyAdded && vm.addedIDs.count >= 2 { showRanking = true }
+                                }
+                            },
                             onWatchlist: { Task { await vm.addToWatchlist(item: item, userID: appState.currentUser?.id) } }
                         )
                         Divider()

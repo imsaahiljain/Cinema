@@ -9,7 +9,9 @@
 /* Begin PBXBuildFile section */
 		0882FC922D15144F6CAE4C9C /* RankingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 346682FA060F15CE0C72B7BF /* RankingView.swift */; };
 		0AA3EA0AD48B8314A5F4809B /* ELOService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D937843E51844F3C60087C3C /* ELOService.swift */; };
+		38C68A492E7B13910AA386D4 /* RankingPrototypeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D21685CB405D619BE0A1A89 /* RankingPrototypeView.swift */; };
 		39336CA923FDB0EEF05F3570 /* CinemaUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5689F8A04B12726941D1FB2 /* CinemaUITests.swift */; };
+		3B47F84367E892F3B2930035 /* DiagonalOverarchWinEffect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479F67E8B319479E66ACF14A /* DiagonalOverarchWinEffect.swift */; };
 		3E27001FEEFFB92A621450FF /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3547E670F15122040C67802 /* AuthView.swift */; };
 		3F42334E5A16E2DC2C1B98A6 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B8A564A01E418389F6CB0E8 /* AppState.swift */; };
 		4FD7FC5889D63BB95AF2948A /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C83E1A7A3D9EE17085F23C6C /* RootView.swift */; };
@@ -54,6 +56,8 @@
 		346682FA060F15CE0C72B7BF /* RankingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingView.swift; sourceTree = "<group>"; };
 		37109B718B53FD6EB359A77C /* CinemaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaApp.swift; sourceTree = "<group>"; };
 		400E820CB0EC0231B9067CF3 /* GlassCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCard.swift; sourceTree = "<group>"; };
+		479F67E8B319479E66ACF14A /* DiagonalOverarchWinEffect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagonalOverarchWinEffect.swift; sourceTree = "<group>"; };
+		5D21685CB405D619BE0A1A89 /* RankingPrototypeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingPrototypeView.swift; sourceTree = "<group>"; };
 		716F3EF3F2B0C5963A9A3BA9 /* CinemaUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CinemaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A3BD8BDAB9CC17FD0B896A6D /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		A5D65343706BC8CD34661074 /* CinemaUser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaUser.swift; sourceTree = "<group>"; };
@@ -89,7 +93,9 @@
 		00C6D9986360B76AB486F377 /* Ranking */ = {
 			isa = PBXGroup;
 			children = (
+				5D21685CB405D619BE0A1A89 /* RankingPrototypeView.swift */,
 				346682FA060F15CE0C72B7BF /* RankingView.swift */,
+				7972971357EA6E8C4F395116 /* WinEffects */,
 			);
 			path = Ranking;
 			sourceTree = "<group>";
@@ -161,6 +167,14 @@
 				E3547E670F15122040C67802 /* AuthView.swift */,
 			);
 			path = Auth;
+			sourceTree = "<group>";
+		};
+		7972971357EA6E8C4F395116 /* WinEffects */ = {
+			isa = PBXGroup;
+			children = (
+				479F67E8B319479E66ACF14A /* DiagonalOverarchWinEffect.swift */,
+			);
+			path = WinEffects;
 			sourceTree = "<group>";
 		};
 		83DFDCB80E4EA2B4E9495E05 /* Discover */ = {
@@ -322,7 +336,8 @@
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
 					896EA45066AC4318412AC95D = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = PXH52A4CBY;
+						ProvisioningStyle = Automatic;
 					};
 					C65110D96C331CA0AFAC0C37 = {
 						TestTargetID = 896EA45066AC4318412AC95D;
@@ -381,6 +396,7 @@
 				A250F69CE75D2D402DCA7EC3 /* CinemaApp.swift in Sources */,
 				FD58D6D5301ACC480E449A99 /* CinemaTheme.swift in Sources */,
 				F59F9E00678E8E9D5187B03E /* CinemaUser.swift in Sources */,
+				3B47F84367E892F3B2930035 /* DiagonalOverarchWinEffect.swift in Sources */,
 				677151F79942E0B4FED24F67 /* DiscoverView.swift in Sources */,
 				0AA3EA0AD48B8314A5F4809B /* ELOService.swift in Sources */,
 				9A9CFC8A976D1B49E20FD6F6 /* FeedView.swift in Sources */,
@@ -392,6 +408,7 @@
 				D657848E86985F1375D4A1C6 /* MovieInfoView.swift in Sources */,
 				F83DEF400F2F1332CC8E640D /* OnboardingView.swift in Sources */,
 				857EA269A7043EA70B9E0568 /* ProfileView.swift in Sources */,
+				38C68A492E7B13910AA386D4 /* RankingPrototypeView.swift in Sources */,
 				0882FC922D15144F6CAE4C9C /* RankingView.swift in Sources */,
 				4FD7FC5889D63BB95AF2948A /* RootView.swift in Sources */,
 				71F4E38D958B04CF4095E790 /* SearchView.swift in Sources */,
@@ -415,63 +432,12 @@
 		0DCA55B8FB0C0D78BDBAF3B6 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
-				CLANG_CXX_LIBRARY = "libc++";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"$(inherited)",
-					"DEBUG=1",
-				);
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
@@ -480,35 +446,21 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = "";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = PXH52A4CBY;
 				INFOPLIST_FILE = Cinema/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.mtgcardneeder.Cinema;
-				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
 		6A2D3865CE0B7112F38CD9DC /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.mtgcardneeder.CinemaUITests;
-				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Cinema;
 			};
 			name = Debug;
@@ -517,35 +469,21 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = "";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = PXH52A4CBY;
 				INFOPLIST_FILE = Cinema/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.mtgcardneeder.Cinema;
-				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
 		E12829035F0D9A996BE26CED /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.mtgcardneeder.CinemaUITests;
-				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Cinema;
 			};
 			name = Release;
@@ -553,56 +491,12 @@
 		E136CF6F84298BBF6E953666 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
-				CLANG_CXX_LIBRARY = "libc++";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				ENABLE_NS_ASSERTIONS = NO;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MTL_ENABLE_DEBUG_INFO = NO;
-				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = RELEASE;
 				SWIFT_VERSION = 6.0;
 			};
 			name = Release;

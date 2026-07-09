@@ -29,7 +29,7 @@ final class RankingViewModel {
             if let pair = selectPair(from: items) {
                 let left  = try await TMDBClient.shared.details(tmdbID: pair.0, mediaType: .movie)
                 let right = try await TMDBClient.shared.details(tmdbID: pair.1, mediaType: .movie)
-                currentPair = (left, right)
+                withAnimation(.easeInOut(duration: 0.25)) { currentPair = (left, right) }
             }
         } catch {}
         isLoading = false
@@ -212,95 +212,180 @@ struct RankingView: View {
 private struct BattleView: View {
     let pair: (MediaItem, MediaItem)
     let onChoose: (MediaItem, MediaItem) -> Void
-    @State private var chosen: Side?
 
-    enum Side { case left, right }
+    @State private var dragTranslation: CGFloat = 0
+    @State private var winnerStartSide: RankingDuelSide?
+    @State private var thresholdCrossed = false
+    @State private var pulseSide: RankingDuelSide?
+    @State private var commitTick = 0
+
+    private let commitProgress: CGFloat = 0.6
 
     var body: some View {
         GeometryReader { geo in
-            HStack(spacing: 0) {
-                PosterSide(
-                    item: pair.0,
-                    isWinner: chosen == .left,
-                    isLoser: chosen == .right,
-                    width: geo.size.width / 2
-                )
-                .onTapGesture { pick(.left) }
+            let halfWidth = geo.size.width / 2
+            let progress = revealProgress(travel: halfWidth)
 
-                Rectangle()
-                    .fill(Color.white.opacity(0.12))
-                    .frame(width: 1)
+            ZStack {
+                HStack(spacing: 0) {
+                    posterSide(.left, item: pair.0, geo: geo, progress: progress, travel: halfWidth)
+                    posterSide(.right, item: pair.1, geo: geo, progress: progress, travel: halfWidth)
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .ignoresSafeArea()
 
-                PosterSide(
-                    item: pair.1,
-                    isWinner: chosen == .right,
-                    isLoser: chosen == .left,
-                    width: geo.size.width / 2
-                )
-                .onTapGesture { pick(.right) }
+                VStack(spacing: 26) {
+                    Image(systemName: "arrow.left.arrow.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(CinemaTheme.Colors.gold)
+                    Circle()
+                        .strokeBorder(CinemaTheme.Colors.gold.opacity(0.8), lineWidth: 1)
+                        .background(Circle().fill(CinemaTheme.Colors.background.opacity(0.6)))
+                        .frame(width: 30, height: 30)
+                        .overlay(
+                            Text("vs")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(CinemaTheme.Colors.gold)
+                        )
+                }
+                .opacity(1 - progress)
             }
-            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { value in
+                        if winnerStartSide == nil {
+                            winnerStartSide = value.startLocation.x < halfWidth ? .left : .right
+                        }
+                        dragTranslation = value.translation.width
+                        let p = revealProgress(travel: halfWidth)
+                        let crossed = p > commitProgress
+                        if crossed != thresholdCrossed { thresholdCrossed = crossed }
+                    }
+                    .onEnded { _ in
+                        let p = revealProgress(travel: halfWidth)
+                        if p > commitProgress, let winner = winnerStartSide {
+                            commitPick(winner)
+                        } else {
+                            withAnimation(.spring(duration: 0.35)) { dragTranslation = 0 }
+                            thresholdCrossed = false
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                winnerStartSide = nil
+                            }
+                        }
+                    }
+            )
         }
+        .ignoresSafeArea()
+        .sensoryFeedback(.selection, trigger: thresholdCrossed)
+        .sensoryFeedback(.impact(weight: .medium), trigger: commitTick)
         .id("\(pair.0.id)-\(pair.1.id)")
     }
 
-    private func pick(_ side: Side) {
-        guard chosen == nil else { return }
-        withAnimation(.spring(duration: 0.35)) { chosen = side }
+    private func revealProgress(travel: CGFloat) -> CGFloat {
+        guard let winnerStartSide else { return 0 }
+        let signed = winnerStartSide == .left ? dragTranslation : -dragTranslation
+        return max(0, min(1, signed / travel))
+    }
+
+    @ViewBuilder
+    private func posterSide(_ side: RankingDuelSide, item: MediaItem, geo: GeometryProxy, progress: CGFloat, travel: CGFloat) -> some View {
+        let isWinner = winnerStartSide == side
+        let isLoser = winnerStartSide != nil && winnerStartSide != side
+
+        let base = RealPosterSide(item: item, isPulsing: pulseSide == side)
+            .frame(width: geo.size.width / 2)
+
+        DiagonalOverarchWinEffect.apply(base, .init(
+            isWinner: isWinner,
+            isLoser: isLoser,
+            side: side,
+            progress: progress,
+            travel: travel
+        ))
+        .animation(.easeOut(duration: 0.15), value: progress)
+    }
+
+    private func commitPick(_ side: RankingDuelSide) {
+        pulseSide = side
+        commitTick += 1
+        withAnimation(.spring(duration: 0.4, bounce: 0.3)) { dragTranslation = 0 }
+        thresholdCrossed = false
         let winner = side == .left ? pair.0 : pair.1
-        let loser  = side == .left ? pair.1 : pair.0
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        let loser = side == .left ? pair.1 : pair.0
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             onChoose(winner, loser)
         }
     }
 }
 
-private struct PosterSide: View {
+private struct RealPosterSide: View {
     let item: MediaItem
-    let isWinner: Bool
-    let isLoser: Bool
-    let width: CGFloat
+    let isPulsing: Bool
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            PosterImage(path: item.posterPath, cornerRadius: 0)
-                .frame(width: width)
-                .clipped()
+        GeometryReader { geo in
+            ZStack {
+                backdrop
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
 
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.9)],
-                startPoint: .center,
-                endPoint: .bottom
-            )
+                Color.black.opacity(0.35)
 
-            VStack(spacing: 4) {
-                if let year = item.releaseYear {
-                    Text(year)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                VStack(spacing: 10) {
+                    PosterImage(path: item.posterPath, cornerRadius: 12)
+                        .frame(width: geo.size.width * 0.62, height: geo.size.width * 0.62 * 1.5)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
+                        )
+
+                    VStack(spacing: 2) {
+                        Text(item.title)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .padding(.horizontal, 12)
+                        if let year = item.releaseYear {
+                            Text(year)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.55))
+                        }
+                    }
                 }
-                Text(item.title)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .padding(.horizontal, 12)
             }
-            .padding(.bottom, 60)
-
-            if isWinner {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 52))
-                    .foregroundStyle(CinemaTheme.Colors.gold)
-                    .padding(.bottom, 160)
-                    .transition(.scale(scale: 0.5).combined(with: .opacity))
-            }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
-        .frame(width: width)
-        .scaleEffect(isLoser ? 0.93 : 1.0)
-        .opacity(isLoser ? 0.3 : 1.0)
-        .animation(.spring(duration: 0.35), value: isWinner)
-        .animation(.spring(duration: 0.35), value: isLoser)
+        .overlay(
+            Rectangle()
+                .strokeBorder(CinemaTheme.Colors.gold.opacity(isPulsing ? 0.9 : 0), lineWidth: 3)
+        )
+        .scaleEffect(isPulsing ? 1.02 : 1.0)
+        .animation(.spring(duration: 0.3), value: isPulsing)
+    }
+
+    @ViewBuilder
+    private var backdrop: some View {
+        if let path = item.backdropPath, let url = TMDBClient.shared.backdropURL(path: path) {
+            AsyncImage(url: url) { phase in
+                if case .success(let image) = phase {
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    CinemaTheme.Colors.surface
+                }
+            }
+        } else if let path = item.posterPath, let url = TMDBClient.shared.posterURL(path: path) {
+            AsyncImage(url: url) { phase in
+                if case .success(let image) = phase {
+                    image.resizable().aspectRatio(contentMode: .fill).blur(radius: 18)
+                } else {
+                    CinemaTheme.Colors.surface
+                }
+            }
+        } else {
+            CinemaTheme.Colors.surface
+        }
     }
 }
 
