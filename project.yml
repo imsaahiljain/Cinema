@@ -42,12 +42,19 @@ targets:
     info:
       path: Cinema/Resources/Info.plist
       properties:
+        CFBundleDisplayName: "Popcorn"
         UILaunchScreen:
           UIColorName: LaunchScreenBackground
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         NSPhotoLibraryUsageDescription: "Used to set your profile photo."
-        NSContactsUsageDescription: "Cinema uses your contacts to find friends already on the app."
+        NSContactsUsageDescription: "Popcorn uses your contacts to find friends already on the app."
+        UIAppFonts:
+          - LibreCaslonText-Regular.ttf
+          - LibreCaslonText-Bold.ttf
+          - NunitoSans-Regular.ttf
+          - NunitoSans-SemiBold.ttf
+          - NunitoSans-Bold.ttf
     scheme:
       shared: true
       testTargets:
