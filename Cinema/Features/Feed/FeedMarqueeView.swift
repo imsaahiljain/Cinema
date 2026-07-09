@@ -39,8 +39,6 @@ private enum MarqueeTheme {
     static let accent = Color(red: 197 / 255, green: 56 / 255, blue: 41 / 255)
     static let tagText = Color(red: 144 / 255, green: 83 / 255, blue: 0 / 255)
     static let tagBackground = Color(red: 251 / 255, green: 233 / 255, blue: 198 / 255)
-    static let perforationLine = Color(red: 232 / 255, green: 219 / 255, blue: 209 / 255)
-
     enum Font {
         static func wordmark(_ size: CGFloat) -> SwiftUI.Font { .custom("LibreCaslonText-Regular", size: size) }
         static func wordmarkBold(_ size: CGFloat) -> SwiftUI.Font { .custom("LibreCaslonText-Bold", size: size) }
@@ -221,14 +219,21 @@ private struct PopCard: View {
     let onLikeTap: () -> Void
     let onPosterTap: () -> Void
 
+    // TMDB posters are 2:3 — sizing the frame to that exact ratio means
+    // .fill crops nothing, rather than cropping to whatever height the
+    // text content happens to produce.
+    private static let posterWidth: CGFloat = 96
+    private static let posterHeight: CGFloat = posterWidth * 1.5
+
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(alignment: .top, spacing: 16) {
             poster
-                .frame(width: 96)
+                .frame(width: Self.posterWidth, height: Self.posterHeight)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onPosterTap)
-
-            TicketPerforation()
+                .padding(.leading, 16)
+                .padding(.top, 14)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
@@ -288,7 +293,6 @@ private struct PopCard: View {
                     )
                 }
             }
-            .padding(.leading, 16)
             .padding(.trailing, 16)
             .padding(.vertical, 14)
             .contentShape(Rectangle())
@@ -379,32 +383,6 @@ private struct PosterPlaceholder: View {
                     .padding(6)
             )
         }
-    }
-}
-
-// MARK: - Ticket perforation (tear-edge between poster and content)
-
-private struct DashedVLine: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: rect.midX, y: 0))
-        p.addLine(to: CGPoint(x: rect.midX, y: rect.height))
-        return p
-    }
-}
-
-private struct TicketPerforation: View {
-    var body: some View {
-        ZStack {
-            DashedVLine()
-                .stroke(MarqueeTheme.perforationLine, style: StrokeStyle(lineWidth: 1.5, dash: [3, 4]))
-            VStack {
-                Circle().fill(MarqueeTheme.background).frame(width: 14, height: 14)
-                Spacer()
-                Circle().fill(MarqueeTheme.background).frame(width: 14, height: 14)
-            }
-        }
-        .frame(width: 14)
     }
 }
 
