@@ -7,58 +7,71 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		C3D4E5F6A7B8C9D0E1F2A3B4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* Assets.xcassets */; };
 		0882FC922D15144F6CAE4C9C /* RankingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 346682FA060F15CE0C72B7BF /* RankingView.swift */; };
 		0AA3EA0AD48B8314A5F4809B /* ELOService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D937843E51844F3C60087C3C /* ELOService.swift */; };
+		39336CA923FDB0EEF05F3570 /* CinemaUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5689F8A04B12726941D1FB2 /* CinemaUITests.swift */; };
 		3E27001FEEFFB92A621450FF /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3547E670F15122040C67802 /* AuthView.swift */; };
 		3F42334E5A16E2DC2C1B98A6 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B8A564A01E418389F6CB0E8 /* AppState.swift */; };
 		4FD7FC5889D63BB95AF2948A /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C83E1A7A3D9EE17085F23C6C /* RootView.swift */; };
 		544A035FB40C0037B07E26DE /* LeaderboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFD116937AAC729CA33C8829 /* LeaderboardView.swift */; };
 		59606C18B058A3EA2FF7817C /* TMDBClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD02B3CF21F04A2669A89234 /* TMDBClient.swift */; };
+		5B44A725C520A94C18B799D3 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1981E84705ED6DF978BDCF98 /* Log.swift */; };
+		677151F79942E0B4FED24F67 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3DA5F7D1A0859DF4CEB3703 /* DiscoverView.swift */; };
 		71F4E38D958B04CF4095E790 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19DC63385B01DB8197C52FB5 /* SearchView.swift */; };
 		77EC1A99DEF36338EEB17EBC /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 083082767AFFFA05A82D3F8A /* SupabaseClient.swift */; };
 		7C4CA3F23C3A5C425A37375D /* GlassCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400E820CB0EC0231B9067CF3 /* GlassCard.swift */; };
+		8209A44BA41B65508968E11A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C938C3BDAD6776A47E6C5A38 /* Assets.xcassets */; };
 		857EA269A7043EA70B9E0568 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00768B59A655BABAFB17CD6 /* ProfileView.swift */; };
 		9508C0F2E6498FBEDF0C149B /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3BD8BDAB9CC17FD0B896A6D /* Secrets.swift */; };
 		9A9CFC8A976D1B49E20FD6F6 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD5EEFB5D64C752C8FB833EF /* FeedView.swift */; };
 		A250F69CE75D2D402DCA7EC3 /* CinemaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37109B718B53FD6EB359A77C /* CinemaApp.swift */; };
 		AD39238523FD4394E5E21741 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 416690B4CBCE1E67F3C7A792 /* Supabase */; };
 		B0092C52AE699944D988F4F3 /* MediaItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB623A11E101E67864FA95BD /* MediaItem.swift */; };
+		D657848E86985F1375D4A1C6 /* MovieInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DF633982F3A20D7E1103DB9 /* MovieInfoView.swift */; };
 		EAEBD73332734E8C8697F037 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEDF737AB14A01612CDDBC73 /* MainTabView.swift */; };
 		F59F9E00678E8E9D5187B03E /* CinemaUser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5D65343706BC8CD34661074 /* CinemaUser.swift */; };
-		AA11BB22CC33DD44EE55FF66 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF6677AA /* Log.swift */; };
-		1A2B3C4D5E6F7A8B9C0D1E2F /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3C4D5E6F7A8B9C0D1E2F3A /* DiscoverView.swift */; };
-		3C4D5E6F7A8B9C0D1E2F3A4B /* MovieInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D5E6F7A8B9C0D1E2F3A4B5C /* MovieInfoView.swift */; };
 		F83DEF400F2F1332CC8E640D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2897154F9235706C8E36A22 /* OnboardingView.swift */; };
 		FD58D6D5301ACC480E449A99 /* CinemaTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19B6FE300EFDFCFD23526BD3 /* CinemaTheme.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		7B5C445BE71D0C219A5B80D1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CB65C5AAD396F27F893A18CE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 896EA45066AC4318412AC95D;
+			remoteInfo = Cinema;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
-		A1B2C3D4E5F6A7B8C9D0E1F2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		083082767AFFFA05A82D3F8A /* SupabaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseClient.swift; sourceTree = "<group>"; };
+		0DF633982F3A20D7E1103DB9 /* MovieInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovieInfoView.swift; sourceTree = "<group>"; };
+		1981E84705ED6DF978BDCF98 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		19B6FE300EFDFCFD23526BD3 /* CinemaTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaTheme.swift; sourceTree = "<group>"; };
 		19DC63385B01DB8197C52FB5 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		1B8A564A01E418389F6CB0E8 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		346682FA060F15CE0C72B7BF /* RankingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingView.swift; sourceTree = "<group>"; };
 		37109B718B53FD6EB359A77C /* CinemaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaApp.swift; sourceTree = "<group>"; };
 		400E820CB0EC0231B9067CF3 /* GlassCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCard.swift; sourceTree = "<group>"; };
+		716F3EF3F2B0C5963A9A3BA9 /* CinemaUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CinemaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A3BD8BDAB9CC17FD0B896A6D /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		A5D65343706BC8CD34661074 /* CinemaUser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaUser.swift; sourceTree = "<group>"; };
 		AFD116937AAC729CA33C8829 /* LeaderboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardView.swift; sourceTree = "<group>"; };
 		B00768B59A655BABAFB17CD6 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		B5689F8A04B12726941D1FB2 /* CinemaUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaUITests.swift; sourceTree = "<group>"; };
 		C83E1A7A3D9EE17085F23C6C /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		C938C3BDAD6776A47E6C5A38 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D2897154F9235706C8E36A22 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		D3DA5F7D1A0859DF4CEB3703 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		D937843E51844F3C60087C3C /* ELOService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ELOService.swift; sourceTree = "<group>"; };
 		DC2B8C90D80D6BC066B7EED5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		DD5EEFB5D64C752C8FB833EF /* FeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedView.swift; sourceTree = "<group>"; };
 		E3547E670F15122040C67802 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
-		E94966236921CC6C34C05081 /* Cinema.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Cinema.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E94966236921CC6C34C05081 /* Cinema.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Cinema.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EB623A11E101E67864FA95BD /* MediaItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaItem.swift; sourceTree = "<group>"; };
 		FD02B3CF21F04A2669A89234 /* TMDBClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TMDBClient.swift; sourceTree = "<group>"; };
-		BB22CC33DD44EE55FF6677AA /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		FEDF737AB14A01612CDDBC73 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
-		2B3C4D5E6F7A8B9C0D1E2F3A /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
-		4D5E6F7A8B9C0D1E2F3A4B5C /* MovieInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovieInfoView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -107,10 +120,19 @@
 			path = Leaderboard;
 			sourceTree = "<group>";
 		};
+		3D18F4FC5CC7B3828D34EEBB /* CinemaUITests */ = {
+			isa = PBXGroup;
+			children = (
+				B5689F8A04B12726941D1FB2 /* CinemaUITests.swift */,
+			);
+			path = CinemaUITests;
+			sourceTree = "<group>";
+		};
 		4130B066D1F903B654A15128 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				E94966236921CC6C34C05081 /* Cinema.app */,
+				716F3EF3F2B0C5963A9A3BA9 /* CinemaUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -118,7 +140,7 @@
 		4CC4E819521FDB9A8BD2A9D5 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				A1B2C3D4E5F6A7B8C9D0E1F2 /* Assets.xcassets */,
+				C938C3BDAD6776A47E6C5A38 /* Assets.xcassets */,
 				DC2B8C90D80D6BC066B7EED5 /* Info.plist */,
 			);
 			path = Resources;
@@ -139,6 +161,15 @@
 				E3547E670F15122040C67802 /* AuthView.swift */,
 			);
 			path = Auth;
+			sourceTree = "<group>";
+		};
+		83DFDCB80E4EA2B4E9495E05 /* Discover */ = {
+			isa = PBXGroup;
+			children = (
+				D3DA5F7D1A0859DF4CEB3703 /* DiscoverView.swift */,
+				0DF633982F3A20D7E1103DB9 /* MovieInfoView.swift */,
+			);
+			path = Discover;
 			sourceTree = "<group>";
 		};
 		920232A2223141FF5BE81F94 /* Cinema */ = {
@@ -173,6 +204,7 @@
 			isa = PBXGroup;
 			children = (
 				920232A2223141FF5BE81F94 /* Cinema */,
+				3D18F4FC5CC7B3828D34EEBB /* CinemaUITests */,
 				4130B066D1F903B654A15128 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -213,20 +245,11 @@
 			path = DesignSystem;
 			sourceTree = "<group>";
 		};
-		5E6F7A8B9C0D1E2F3A4B5C6D /* Discover */ = {
-			isa = PBXGroup;
-			children = (
-				2B3C4D5E6F7A8B9C0D1E2F3A /* DiscoverView.swift */,
-				4D5E6F7A8B9C0D1E2F3A4B5C /* MovieInfoView.swift */,
-			);
-			path = Discover;
-			sourceTree = "<group>";
-		};
 		E344007A72F22B63247E29F9 /* Features */ = {
 			isa = PBXGroup;
 			children = (
 				73849E701117AB2CA522B0C3 /* Auth */,
-				5E6F7A8B9C0D1E2F3A4B5C6D /* Discover */,
+				83DFDCB80E4EA2B4E9495E05 /* Discover */,
 				BF4DCC654977402A5D544E74 /* Feed */,
 				3A988DB1C5CC47FBFC95FF41 /* Leaderboard */,
 				A46E42E57ABDBCE2980700F0 /* Onboarding */,
@@ -240,7 +263,7 @@
 		F2DCCC94CBF09F44FF29A507 /* Core */ = {
 			isa = PBXGroup;
 			children = (
-				BB22CC33DD44EE55FF6677AA /* Log.swift */,
+				1981E84705ED6DF978BDCF98 /* Log.swift */,
 				540083680EE44913872C3AD6 /* Models */,
 				3A4B871A578D605C97A3B098 /* Network */,
 				18176E01F4C56545E769E094 /* Services */,
@@ -255,8 +278,8 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = D5C1A2D679A46BC38584060A /* Build configuration list for PBXNativeTarget "Cinema" */;
 			buildPhases = (
-				B2C3D4E5F6A7B8C9D0E1F2A3 /* Resources */,
 				8D3E623D25EE588E9F85B8A4 /* Sources */,
+				63D765D0B4D9279AE4EAD057 /* Resources */,
 				75FA0BB749EA503C305ECD8A /* Frameworks */,
 			);
 			buildRules = (
@@ -271,6 +294,24 @@
 			productReference = E94966236921CC6C34C05081 /* Cinema.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C65110D96C331CA0AFAC0C37 /* CinemaUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A4AA7A4DA7DE7804341A5BBE /* Build configuration list for PBXNativeTarget "CinemaUITests" */;
+			buildPhases = (
+				40B04B72266EE99695C082D1 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B83F017590D860AF55CF3936 /* PBXTargetDependency */,
+			);
+			name = CinemaUITests;
+			packageProductDependencies = (
+			);
+			productName = CinemaUITests;
+			productReference = 716F3EF3F2B0C5963A9A3BA9 /* CinemaUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -279,6 +320,14 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 2650;
+				TargetAttributes = {
+					896EA45066AC4318412AC95D = {
+						DevelopmentTeam = "";
+					};
+					C65110D96C331CA0AFAC0C37 = {
+						TestTargetID = 896EA45066AC4318412AC95D;
+					};
+				};
 			};
 			buildConfigurationList = 9C5E538AEE7267778CD62D55 /* Build configuration list for PBXProject "Cinema" */;
 			developmentRegion = en;
@@ -298,22 +347,31 @@
 			projectRoot = "";
 			targets = (
 				896EA45066AC4318412AC95D /* Cinema */,
+				C65110D96C331CA0AFAC0C37 /* CinemaUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		B2C3D4E5F6A7B8C9D0E1F2A3 /* Resources */ = {
+		63D765D0B4D9279AE4EAD057 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C3D4E5F6A7B8C9D0E1F2A3B4 /* Assets.xcassets in Resources */,
+				8209A44BA41B65508968E11A /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		40B04B72266EE99695C082D1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				39336CA923FDB0EEF05F3570 /* CinemaUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		8D3E623D25EE588E9F85B8A4 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -323,20 +381,20 @@
 				A250F69CE75D2D402DCA7EC3 /* CinemaApp.swift in Sources */,
 				FD58D6D5301ACC480E449A99 /* CinemaTheme.swift in Sources */,
 				F59F9E00678E8E9D5187B03E /* CinemaUser.swift in Sources */,
+				677151F79942E0B4FED24F67 /* DiscoverView.swift in Sources */,
 				0AA3EA0AD48B8314A5F4809B /* ELOService.swift in Sources */,
-				AA11BB22CC33DD44EE55FF66 /* Log.swift in Sources */,
 				9A9CFC8A976D1B49E20FD6F6 /* FeedView.swift in Sources */,
 				7C4CA3F23C3A5C425A37375D /* GlassCard.swift in Sources */,
 				544A035FB40C0037B07E26DE /* LeaderboardView.swift in Sources */,
+				5B44A725C520A94C18B799D3 /* Log.swift in Sources */,
 				EAEBD73332734E8C8697F037 /* MainTabView.swift in Sources */,
 				B0092C52AE699944D988F4F3 /* MediaItem.swift in Sources */,
+				D657848E86985F1375D4A1C6 /* MovieInfoView.swift in Sources */,
 				F83DEF400F2F1332CC8E640D /* OnboardingView.swift in Sources */,
 				857EA269A7043EA70B9E0568 /* ProfileView.swift in Sources */,
 				0882FC922D15144F6CAE4C9C /* RankingView.swift in Sources */,
 				4FD7FC5889D63BB95AF2948A /* RootView.swift in Sources */,
 				71F4E38D958B04CF4095E790 /* SearchView.swift in Sources */,
-				1A2B3C4D5E6F7A8B9C0D1E2F /* DiscoverView.swift in Sources */,
-				3C4D5E6F7A8B9C0D1E2F3A4B /* MovieInfoView.swift in Sources */,
 				9508C0F2E6498FBEDF0C149B /* Secrets.swift in Sources */,
 				77EC1A99DEF36338EEB17EBC /* SupabaseClient.swift in Sources */,
 				59606C18B058A3EA2FF7817C /* TMDBClient.swift in Sources */,
@@ -344,6 +402,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B83F017590D860AF55CF3936 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 896EA45066AC4318412AC95D /* Cinema */;
+			targetProxy = 7B5C445BE71D0C219A5B80D1 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		0DCA55B8FB0C0D78BDBAF3B6 /* Debug */ = {
@@ -413,8 +479,9 @@
 		23839E11365CE05AE234F6D2 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = 39495A6H95;
+				DEVELOPMENT_TEAM = "";
 				INFOPLIST_FILE = Cinema/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -424,15 +491,34 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.mtgcardneeder.Cinema;
 				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				TARGETED_DEVICE_FAMILY = "1";
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
+		};
+		6A2D3865CE0B7112F38CD9DC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.mtgcardneeder.CinemaUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Cinema;
+			};
+			name = Debug;
 		};
 		C14CAC07E0CA81D8FC9F137F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = 39495A6H95;
+				DEVELOPMENT_TEAM = "";
 				INFOPLIST_FILE = Cinema/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -442,9 +528,27 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.mtgcardneeder.Cinema;
 				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				TARGETED_DEVICE_FAMILY = "1";
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
+		};
+		E12829035F0D9A996BE26CED /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.mtgcardneeder.CinemaUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Cinema;
+			};
+			name = Release;
 		};
 		E136CF6F84298BBF6E953666 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -511,6 +615,15 @@
 			buildConfigurations = (
 				0DCA55B8FB0C0D78BDBAF3B6 /* Debug */,
 				E136CF6F84298BBF6E953666 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A4AA7A4DA7DE7804341A5BBE /* Build configuration list for PBXNativeTarget "CinemaUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6A2D3865CE0B7112F38CD9DC /* Debug */,
+				E12829035F0D9A996BE26CED /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

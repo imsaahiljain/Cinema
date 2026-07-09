@@ -27,7 +27,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.mtgcardneeder.Cinema
         INFOPLIST_FILE: Cinema/Resources/Info.plist
         DEVELOPMENT_TEAM: ""
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
         SWIFT_EMIT_LOC_STRINGS: YES
     dependencies:
       - package: Supabase
@@ -39,6 +39,24 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         NSPhotoLibraryUsageDescription: "Used to set your profile photo."
+        NSContactsUsageDescription: "Cinema uses your contacts to find friends already on the app."
+    scheme:
+      shared: true
+      testTargets:
+        - CinemaUITests
+
+  CinemaUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: CinemaUITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mtgcardneeder.CinemaUITests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Cinema
 
 packages:
   Supabase:
