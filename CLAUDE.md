@@ -1,5 +1,9 @@
 # Cinema — CLAUDE.md
 
+## Open Action Items (things only the user can do — check this whenever asked "any action items left?")
+- **Apple Developer Team ID** — not set (`DEVELOPMENT_TEAM: ""` in `project.yml`). Not blocking simulator work, but required before any physical-device build or TestFlight. Get it from Xcode → Settings → Accounts, or developer.apple.com → Membership Details.
+- **Supabase Personal Access Token and/or `service_role` key** — not held. Not currently blocking anything (all data-level work goes through the anon key + REST API), but needed the moment a real schema change or auth-config change comes up. From supabase.com/dashboard/account/tokens (PAT) and the project's Settings → API (`service_role` key).
+
 ## What This Is
 Cinema is a high-velocity social media app for movie/TV taste. Think Beli for restaurants, but for film. Users rank media via pairwise ELO ("This or That"), build a ranked list, and share taste with friends via a social feed.
 
