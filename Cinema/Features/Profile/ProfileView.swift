@@ -985,7 +985,7 @@ struct ShareCard: View {
                     }
                 }
                 Spacer()
-                Text("Cinema")
+                Text("Popcorn")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(CinemaTheme.Colors.textSecondary)
             }

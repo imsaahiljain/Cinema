@@ -43,7 +43,7 @@ private struct SplashView: View {
         ZStack {
             CinemaTheme.Colors.background.ignoresSafeArea()
             VStack(spacing: 12) {
-                Text("Cinema")
+                Text("Popcorn")
                     .font(.system(size: 36, weight: .bold))
                     .foregroundStyle(CinemaTheme.Colors.textPrimary)
                 ProgressView()

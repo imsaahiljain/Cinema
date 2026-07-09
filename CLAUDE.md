@@ -1,4 +1,9 @@
-# Cinema — CLAUDE.md
+# Popcorn — CLAUDE.md
+
+## Naming (read this before assuming "Cinema" vs "Popcorn" is a mistake)
+As of 2026-07-09, the app is branded **Popcorn** to users — app display name, in-app wordmark (splash/login/profile screens), and system permission dialogs all say "Popcorn."
+
+The codebase internals still say **Cinema**: Xcode project/scheme name, bundle ID (`com.mtgcardneeder.Cinema`), Swift types (`CinemaTheme`, `CinemaApp`, `CinemaUser`, etc.), the `Cinema/` folder, the git remote, and the Supabase project name. This is intentional, not a stale/incomplete rename — none of that is visible to a user, and changing it (especially the bundle ID) risks breaking code signing/provisioning for no user-facing benefit. See `Docs/feed-design-spec.md` §9 for the reasoning. Don't "fix" the mismatch by renaming internals unless explicitly asked.
 
 ## Notes File
 `NOTES.md` in this repo is a running scratchpad of freeform notes-to-self. Whenever the user says "note to self," append what they said (verbatim, with today's date) to `NOTES.md` — don't editorialize or fold it into this file. Check `NOTES.md` when asked what notes exist.
@@ -15,7 +20,7 @@
 - **Custom sound effects for This or That** — swipe/commit/win moments should eventually have short custom SFX (not generic iOS system sounds) to match the haptic feedback. Needs either sourcing a few licensed/royalty-free short clips or synthesizing simple tones in-app; punt until the swipe + haptics interaction itself is built and feels right.
 
 ## What This Is
-Cinema is a high-velocity social media app for movie/TV taste. Think Beli for restaurants, but for film. Users rank media via pairwise ELO ("This or That"), build a ranked list, and share taste with friends via a social feed.
+Popcorn is a high-velocity social media app for movie/TV taste. Think Beli for restaurants, but for film. Users rank media via pairwise ELO ("This or That"), build a ranked list, and share taste with friends via a social feed.
 
 ## Current Status & Working Agreement (as of 2026-07-08 — check git log before trusting this is still current)
 

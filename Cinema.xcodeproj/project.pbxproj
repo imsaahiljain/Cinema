@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00E9C31760999F85B1EFCDD2 /* FeedPrototypeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B73F937BD0A805881C7560 /* FeedPrototypeView.swift */; };
 		0882FC922D15144F6CAE4C9C /* RankingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 346682FA060F15CE0C72B7BF /* RankingView.swift */; };
 		0AA3EA0AD48B8314A5F4809B /* ELOService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D937843E51844F3C60087C3C /* ELOService.swift */; };
 		38C68A492E7B13910AA386D4 /* RankingPrototypeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D21685CB405D619BE0A1A89 /* RankingPrototypeView.swift */; };
@@ -47,6 +48,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		06B73F937BD0A805881C7560 /* FeedPrototypeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedPrototypeView.swift; sourceTree = "<group>"; };
 		083082767AFFFA05A82D3F8A /* SupabaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseClient.swift; sourceTree = "<group>"; };
 		0DF633982F3A20D7E1103DB9 /* MovieInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovieInfoView.swift; sourceTree = "<group>"; };
 		1981E84705ED6DF978BDCF98 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
@@ -209,6 +211,7 @@
 		BF4DCC654977402A5D544E74 /* Feed */ = {
 			isa = PBXGroup;
 			children = (
+				06B73F937BD0A805881C7560 /* FeedPrototypeView.swift */,
 				DD5EEFB5D64C752C8FB833EF /* FeedView.swift */,
 			);
 			path = Feed;
@@ -399,6 +402,7 @@
 				3B47F84367E892F3B2930035 /* DiagonalOverarchWinEffect.swift in Sources */,
 				677151F79942E0B4FED24F67 /* DiscoverView.swift in Sources */,
 				0AA3EA0AD48B8314A5F4809B /* ELOService.swift in Sources */,
+				00E9C31760999F85B1EFCDD2 /* FeedPrototypeView.swift in Sources */,
 				9A9CFC8A976D1B49E20FD6F6 /* FeedView.swift in Sources */,
 				7C4CA3F23C3A5C425A37375D /* GlassCard.swift in Sources */,
 				544A035FB40C0037B07E26DE /* LeaderboardView.swift in Sources */,

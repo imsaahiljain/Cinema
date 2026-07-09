@@ -48,7 +48,7 @@ struct AuthView: View {
 
             VStack(spacing: 0) {
                 // Small wordmark
-                Text("Cinema")
+                Text("Popcorn")
                     .font(.system(size: 18, weight: .medium, design: .default))
                     .foregroundStyle(Color.white.opacity(0.5))
                     .padding(.top, geo.safeAreaInsets.top + 24)

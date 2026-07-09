@@ -12,6 +12,8 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Popcorn</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -19,7 +21,7 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSContactsUsageDescription</key>
-	<string>Cinema uses your contacts to find friends already on the app.</string>
+	<string>Popcorn uses your contacts to find friends already on the app.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Used to set your profile photo.</string>
 	<key>UILaunchScreen</key>
