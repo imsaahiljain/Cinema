@@ -8,3 +8,4 @@ Freeform notes-to-self, captured verbatim whenever you say "note to self" in con
 - (2026-07-08) make feed called popcorn and each of the posts is a "pop"
 - (2026-07-09) change onboarding flow from email+password into google-account everything else same
 - (2026-07-09) missing back arrows in onboarding
+- (2026-07-09) Note to self post production: iterate on the popcorn bucket with pops features
