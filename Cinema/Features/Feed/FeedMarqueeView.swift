@@ -241,7 +241,11 @@ private struct PopCard: View {
             // that never needs to crop the image to fit.
             poster
                 .frame(width: contentHeight * 2 / 3, height: contentHeight)
-                .clipped()
+                // Own corner radius matching the card's, not just relying on
+                // the outer card clip — that only rounds the two corners
+                // that happen to sit on the card's own boundary (left side),
+                // leaving the right side (against the text column) sharp.
+                .clipShape(RoundedRectangle(cornerRadius: 16))
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onPosterTap)
 
