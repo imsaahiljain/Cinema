@@ -132,21 +132,42 @@ private let mockPops: [MockPop] = [
 
 struct FeedMarqueeView: View {
     @State private var expandedIDs: Set<Int> = []
+    @State private var likedIDs: Set<Int> = []
+    @State private var resolvedMedia: [Int: MediaItem] = [:]
+    @State private var selectedFilm: MediaItem?
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
                 Section {
                     ForEach(mockPops) { pop in
-                        PopCard(pop: pop, isExpanded: expandedIDs.contains(pop.id)) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                if expandedIDs.contains(pop.id) {
-                                    expandedIDs.remove(pop.id)
-                                } else {
-                                    expandedIDs.insert(pop.id)
+                        PopCard(
+                            pop: pop,
+                            media: resolvedMedia[pop.id],
+                            isExpanded: expandedIDs.contains(pop.id),
+                            isLiked: likedIDs.contains(pop.id),
+                            onExpandTap: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    if expandedIDs.contains(pop.id) {
+                                        expandedIDs.remove(pop.id)
+                                    } else {
+                                        expandedIDs.insert(pop.id)
+                                    }
                                 }
+                            },
+                            onLikeTap: {
+                                withAnimation(.spring(duration: 0.3, bounce: 0.5)) {
+                                    if likedIDs.contains(pop.id) {
+                                        likedIDs.remove(pop.id)
+                                    } else {
+                                        likedIDs.insert(pop.id)
+                                    }
+                                }
+                            },
+                            onPosterTap: {
+                                if let media = resolvedMedia[pop.id] { selectedFilm = media }
                             }
-                        }
+                        )
                     }
                 } header: {
                     header
@@ -157,6 +178,20 @@ struct FeedMarqueeView: View {
         }
         .background(MarqueeTheme.background.ignoresSafeArea())
         .scrollContentBackground(.hidden)
+        .sheet(item: $selectedFilm) { film in
+            MovieInfoView(film: film)
+        }
+        .task {
+            // Real TMDB posters for the mock pops — sequential on purpose,
+            // this is prototype-only lookup-by-title, not how production
+            // wiring will fetch (that'll carry a real tmdb_id already).
+            for pop in mockPops where resolvedMedia[pop.id] == nil {
+                if let results = try? await TMDBClient.shared.search(query: pop.movie),
+                   let first = results.first(where: { $0.posterPath != nil }) {
+                    resolvedMedia[pop.id] = first
+                }
+            }
+        }
     }
 
     private var header: some View {
@@ -179,13 +214,19 @@ struct FeedMarqueeView: View {
 
 private struct PopCard: View {
     let pop: MockPop
+    let media: MediaItem?
     let isExpanded: Bool
-    let onTap: () -> Void
+    let isLiked: Bool
+    let onExpandTap: () -> Void
+    let onLikeTap: () -> Void
+    let onPosterTap: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
-            PosterPlaceholder(dark: pop.posterDark, darker: pop.posterDarker)
+            poster
                 .frame(width: 96)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onPosterTap)
 
             TicketPerforation()
 
@@ -234,23 +275,75 @@ private struct PopCard: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
-                HStack(spacing: 14) {
-                    Text("♥ \(pop.likes)")
-                    Text("💬 \(pop.comments)")
+                HStack(spacing: 16) {
+                    ReactionButton(
+                        outlineSymbol: "heart", filledSymbol: "heart.fill",
+                        count: pop.likes + (isLiked ? 1 : 0), isActive: isLiked,
+                        activeColor: MarqueeTheme.accent, onTap: onLikeTap
+                    )
+                    ReactionButton(
+                        outlineSymbol: "bubble.right", filledSymbol: "bubble.right.fill",
+                        count: pop.comments, isActive: false,
+                        activeColor: MarqueeTheme.accent, onTap: {}
+                    )
                 }
-                .font(MarqueeTheme.Font.bodySemiBold(12))
-                .foregroundStyle(MarqueeTheme.secondaryText)
             }
             .padding(.leading, 16)
             .padding(.trailing, 16)
             .padding(.vertical, 14)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onExpandTap)
         }
         .background(MarqueeTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: Color(red: 60/255, green: 30/255, blue: 10/255).opacity(0.06), radius: 1, x: 0, y: 1)
         .shadow(color: Color(red: 60/255, green: 30/255, blue: 10/255).opacity(0.08), radius: 10, x: 0, y: 6)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onTap)
+    }
+
+    // Real poster when TMDB has resolved one; falls back to the striped
+    // placeholder (also the loading state) rather than PosterImage's
+    // built-in dark-themed placeholder, which would clash with Marquee's
+    // warm light palette.
+    @ViewBuilder
+    private var poster: some View {
+        if let path = media?.posterPath, let url = TMDBClient.shared.posterURL(path: path) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fill)
+                default:
+                    PosterPlaceholder(dark: pop.posterDark, darker: pop.posterDarker)
+                }
+            }
+        } else {
+            PosterPlaceholder(dark: pop.posterDark, darker: pop.posterDarker)
+        }
+    }
+}
+
+// MARK: - Reaction button (native icon, fills with color on tap — not emoji)
+
+private struct ReactionButton: View {
+    let outlineSymbol: String
+    let filledSymbol: String
+    let count: Int
+    let isActive: Bool
+    let activeColor: Color
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 5) {
+                Image(systemName: isActive ? filledSymbol : outlineSymbol)
+                    .font(.system(size: 14, weight: .regular))
+                Text("\(count)")
+                    .font(MarqueeTheme.Font.bodySemiBold(12))
+            }
+            .foregroundStyle(isActive ? activeColor : MarqueeTheme.secondaryText)
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(isActive ? 1.1 : 1.0)
+        .sensoryFeedback(.impact(weight: .light), trigger: isActive)
     }
 }
 

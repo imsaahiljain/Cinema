@@ -9,3 +9,4 @@ Freeform notes-to-self, captured verbatim whenever you say "note to self" in con
 - (2026-07-09) change onboarding flow from email+password into google-account everything else same
 - (2026-07-09) missing back arrows in onboarding
 - (2026-07-09) Note to self post production: iterate on the popcorn bucket with pops features
+- (2026-07-09) Note to self: make sure all the elements are cohesive. We're doing it tab by tab, feature by feature right now, which means each feature looks a bit different and won't look as cohesive — fix that at the end with an overall recalibration pass. (Context: moving away from the pure-black-with-yellow "Cinema" theme since apps like Letterboxd don't go pure black either, it's too harsh; the Marquee feed's warm/laid-back tone is fine for now but needs to be reconciled with everything else eventually.)
