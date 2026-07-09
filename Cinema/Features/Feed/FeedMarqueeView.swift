@@ -210,6 +210,13 @@ struct FeedMarqueeView: View {
 
 // MARK: - Pop Card
 
+private struct CardHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 private struct PopCard: View {
     let pop: MockPop
     let media: MediaItem?
@@ -219,21 +226,24 @@ private struct PopCard: View {
     let onLikeTap: () -> Void
     let onPosterTap: () -> Void
 
-    // TMDB posters are 2:3 — sizing the frame to that exact ratio means
-    // .fill crops nothing, rather than cropping to whatever height the
-    // text content happens to produce.
-    private static let posterWidth: CGFloat = 96
-    private static let posterHeight: CGFloat = posterWidth * 1.5
+    // Measured from the text column so the poster can match it exactly —
+    // an aspectRatio+maxHeight negotiation between two HStack children
+    // with no other anchor produced an oversized, ambiguous row height
+    // (dead white space below the text). A real measurement is
+    // deterministic instead.
+    @State private var contentHeight: CGFloat = 190
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
+            // Per the design spec: fixed 2:3 poster ratio (TMDB's real
+            // ratio), spanning the full card height — width is derived
+            // from that height, not fixed, so it's a tall narrow rectangle
+            // that never needs to crop the image to fit.
             poster
-                .frame(width: Self.posterWidth, height: Self.posterHeight)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .frame(width: contentHeight * 2 / 3, height: contentHeight)
+                .clipped()
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onPosterTap)
-                .padding(.leading, 16)
-                .padding(.top, 14)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
@@ -295,6 +305,11 @@ private struct PopCard: View {
             }
             .padding(.trailing, 16)
             .padding(.vertical, 14)
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: CardHeightKey.self, value: geo.size.height)
+                }
+            )
             .contentShape(Rectangle())
             .onTapGesture(perform: onExpandTap)
         }
@@ -302,6 +317,9 @@ private struct PopCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: Color(red: 60/255, green: 30/255, blue: 10/255).opacity(0.06), radius: 1, x: 0, y: 1)
         .shadow(color: Color(red: 60/255, green: 30/255, blue: 10/255).opacity(0.08), radius: 10, x: 0, y: 6)
+        .onPreferenceChange(CardHeightKey.self) { newHeight in
+            if newHeight > 0 { contentHeight = newHeight }
+        }
     }
 
     // Real poster when TMDB has resolved one; falls back to the striped
