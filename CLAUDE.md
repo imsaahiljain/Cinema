@@ -8,6 +8,9 @@ The codebase internals still say **Cinema**: Xcode project/scheme name, bundle I
 ## Notes File
 `NOTES.md` in this repo is a running scratchpad of freeform notes-to-self. Whenever the user says "note to self," append what they said (verbatim, with today's date) to `NOTES.md` — don't editorialize or fold it into this file. Check `NOTES.md` when asked what notes exist.
 
+## Polish Log
+`Docs/polish-log.md` tracks the small "give it personality" UI/UX details worth referencing later for marketing content — color-coded scores, gamified unlocks, signature interactions, that kind of thing. Not a full changelog (git history covers that); only the deliberate, opinionated touches. Add an entry (newest on top) whenever one of these gets decided or built, even if it hasn't been implemented yet — mark undecided/unbuilt ones `*(decided, not yet built)*` and update once shipped.
+
 ## Open Action Items (things only the user can do — check this whenever asked "any action items left?")
 - ~~Apple Developer Team ID~~ — done. User's Xcode account has a free Personal Team, `PXH52A4CBY` ("Saahil Jain (Personal Team)"), now set as `DEVELOPMENT_TEAM` in `project.yml` with `CODE_SIGN_STYLE: Automatic`. Physical device (Saahil Jain's iPhone, an iPhone 17,5) is paired and shows up in both `xcrun devicectl list devices` and `xcrun xctrace list devices`. Personal Team signing means installed builds need re-signing every 7 days — if a device build stops launching after a week of inactivity, that's why; just rebuild and reinstall.
 - ~~Supabase Personal Access Token~~ — done, saved at `~/.supabase/access-token` (outside the repo, never committed). Verified working against `api.supabase.com/v1/projects`.
