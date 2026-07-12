@@ -6,6 +6,9 @@ Whenever a change like this gets decided or built, add an entry here (newest on 
 
 ---
 
+**2026-07-11 — Rankings screen: quiet "Lists" caption up top**
+After dropping the big "Rankings" title/subtitle, the tab switcher sat flush against the safe area, which read as cramped rather than clean. Added a small, quiet "Lists" label above it — just enough breathing room, not a return to the big serif headline. Closer to how Beli gives "MY LISTS" a plain caption rather than no header at all.
+
 **2026-07-11 — Hold a list to delete it, with a confirmation**
 Long-pressing a custom list pill opens a context menu with "Delete List"; confirming shows an alert ("This can't be undone") before it actually deletes. Same pattern applied to individual Watchlist and custom-list rows ("Remove"). Small, but this is the kind of thing that makes an app feel finished rather than half-built.
 
