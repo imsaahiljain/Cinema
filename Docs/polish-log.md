@@ -6,6 +6,9 @@ Whenever a change like this gets decided or built, add an entry here (newest on 
 
 ---
 
+**2026-07-11 — Hold a list to delete it, with a confirmation**
+Long-pressing a custom list pill opens a context menu with "Delete List"; confirming shows an alert ("This can't be undone") before it actually deletes. Same pattern applied to individual Watchlist and custom-list rows ("Remove"). Small, but this is the kind of thing that makes an app feel finished rather than half-built.
+
 **2026-07-11 — Lists screen: no headline, "+" to create your own**
 Dropped the big "Rankings" title/subtitle — the tab switcher alone carries context, closer to how Beli treats its list tabs as plain furniture rather than a decorated headline. Replaced the fixed Watched/Watchlist/Lists three-way switcher with a horizontally scrolling row (Watched, Watchlist, then one pill per list you've made) and a fixed "+" button top-right to create a new one on the spot — scrolls sideways once you have more lists than fit on screen instead of hiding them behind a menu.
 

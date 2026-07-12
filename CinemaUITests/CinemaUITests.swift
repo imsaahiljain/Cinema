@@ -52,6 +52,58 @@ final class CinemaUITests: XCTestCase {
         pause()
     }
 
+    func testDeleteCustomList() throws {
+        login()
+        app.buttons["Numbered List"].tap()
+
+        let plusButton = app.buttons["Create List"]
+        XCTAssertTrue(plusButton.waitForExistence(timeout: 5))
+        plusButton.tap()
+
+        let listName = "Delete Me \(Int(Date().timeIntervalSince1970))"
+        let nameField = app.textFields["Funny Movies"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 5))
+        nameField.tap()
+        nameField.typeText(listName)
+        app.buttons["Create"].tap()
+
+        let pill = app.buttons[listName]
+        XCTAssertTrue(pill.waitForExistence(timeout: 10))
+        pill.press(forDuration: 1.0)
+
+        let deleteListMenuItem = app.buttons["Delete List"]
+        XCTAssertTrue(deleteListMenuItem.waitForExistence(timeout: 5))
+        deleteListMenuItem.tap()
+
+        let deleteButton = app.alerts.buttons["Delete"]
+        XCTAssertTrue(deleteButton.waitForExistence(timeout: 5))
+        deleteButton.tap()
+
+        let goneExpectation = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: pill)
+        wait(for: [goneExpectation], timeout: 5)
+        pause()
+    }
+
+    /// One-off cleanup for stray "Delete Me ..." lists left behind by earlier
+    /// failed runs of testDeleteCustomList while that flow was being fixed.
+    func testCleanupStrayLists() throws {
+        login()
+        app.buttons["Numbered List"].tap()
+
+        while true {
+            let strayPill = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Delete Me '")).firstMatch
+            guard strayPill.waitForExistence(timeout: 3) else { break }
+            strayPill.press(forDuration: 1.0)
+            let menuItem = app.buttons["Delete List"]
+            guard menuItem.waitForExistence(timeout: 3) else { break }
+            menuItem.tap()
+            let confirm = app.alerts.buttons["Delete"]
+            guard confirm.waitForExistence(timeout: 3) else { break }
+            confirm.tap()
+            Thread.sleep(forTimeInterval: 1.0)
+        }
+    }
+
     func testSwipeCommitsPick() throws {
         XCTAssertTrue(app.staticTexts["0"].waitForExistence(timeout: 5))
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))

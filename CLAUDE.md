@@ -71,12 +71,14 @@ Cinema/
 4. **TMDB is source of truth** for all media metadata — never store poster URLs or titles locally, always fetch fresh.
 
 ## Design Language: Liquid Glass
+- **The movies are the product — UI chrome should stay quiet and never compete with poster art for attention.** Tabs, badges, buttons: default to the lighter/quieter option (outlined over filled, plain text over solid color pills) so posters and titles stay the visual focus. Called out directly (2026-07-11) after a Rankings-screen pass leaned too hard on solid colored pills and solid score badges.
 - Navigation bars and tab bars use `.glassEffect()` (iOS 26 native)
 - Floating card surfaces: `ultraThinMaterial` background + 1px border at 20% white opacity
 - Color palette: deep cinematic blacks (#0A0A0F), warm gold accents (#F5C842), white text
 - Typography: SF Pro Display for headers, SF Pro Text for body
 - Animations: spring-based, `.matchedGeometryEffect` for poster transitions
 - Heavy reference: Beli iOS app (470 screenshots in `Beli Design References/`). **Read `Docs/beli-design-notes.md` instead of re-analyzing the screenshots** — it's a full written analysis of all 470 images (colors, tab bar, feed/list/detail/onboarding patterns, what to clone vs. skip). Only open the raw screenshots for something the notes don't cover.
+- **In transition, not the whole app yet**: the Marquee feed and the Rankings/Lists screen have moved to a second, warm palette (cream background, brick-red accent, Libre Caslon serif — see `Cinema/DesignSystem/WarmTheme.swift`) instead of this dark/gold system. This is deliberate, tracked in `NOTES.md`, and meant to be reconciled app-wide in a later recalibration pass — don't "fix" the mismatch by reverting one or the other without being asked.
 
 ## Supabase Schema (source of truth in Docs/schema.sql)
 - `users` — profile, username, avatar_url, created_at

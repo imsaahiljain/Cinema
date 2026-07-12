@@ -110,19 +110,17 @@ final class ListsViewModel {
 
     @discardableResult
     func createList(name: String, userID: UUID?) async -> CustomList? {
-        guard let userID, !name.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard let userID, !trimmed.isEmpty else { return nil }
+        let newList = CustomList(id: UUID(), userID: userID, name: trimmed, createdAt: Date())
         do {
-            let inserted: [CustomList] = try await SupabaseClient.shared
+            try await SupabaseClient.shared
                 .from("custom_lists")
-                .insert(["user_id": userID.uuidString, "name": name.trimmingCharacters(in: .whitespaces)])
-                .select()
+                .insert(["id": newList.id.uuidString, "user_id": userID.uuidString, "name": trimmed])
                 .execute()
-                .value
-            if let newList = inserted.first {
-                customLists.append(newList)
-                listItems[newList.id] = []
-                return newList
-            }
+            customLists.append(newList)
+            listItems[newList.id] = []
+            return newList
         } catch {}
         return nil
     }
@@ -149,6 +147,23 @@ final class ListsViewModel {
             watchlistItems.removeAll { $0.id == entry.id }
         } catch {}
     }
+
+    func deleteList(_ list: CustomList) async {
+        do {
+            try await SupabaseClient.shared.from("custom_lists")
+                .delete().eq("id", value: list.id).execute()
+            customLists.removeAll { $0.id == list.id }
+            listItems.removeValue(forKey: list.id)
+        } catch {}
+    }
+
+    func removeFromList(_ item: ListItem) async {
+        do {
+            try await SupabaseClient.shared.from("list_items")
+                .delete().eq("id", value: item.id).execute()
+            listItems[item.listID]?.removeAll { $0.id == item.id }
+        } catch {}
+    }
 }
 
 // Matches the existing 10-Movie Wall onboarding gate — by the time someone
@@ -173,6 +188,9 @@ struct ListsView: View {
     @State private var selection: ListsSelection = .watched
     @State private var showCreateList = false
     @State private var showRanking = false
+    @State private var listPendingDelete: CustomList?
+    @State private var watchlistEntryPendingDelete: WatchlistEntry?
+    @State private var listItemPendingDelete: ListItem?
 
     var body: some View {
         ZStack {
@@ -208,6 +226,54 @@ struct ListsView: View {
             }
         }
         .fullScreenCover(isPresented: $showRanking) { RankingView() }
+        .alert(
+            "Delete \u{201C}\(listPendingDelete?.name ?? "")\u{201D}?",
+            isPresented: Binding(
+                get: { listPendingDelete != nil },
+                set: { if !$0 { listPendingDelete = nil } }
+            )
+        ) {
+            Button("Cancel", role: .cancel) { listPendingDelete = nil }
+            Button("Delete", role: .destructive) {
+                if let list = listPendingDelete {
+                    if selection == .custom(list.id) { selection = .watched }
+                    Task { await vm.deleteList(list) }
+                }
+                listPendingDelete = nil
+            }
+        } message: {
+            Text("This can't be undone.")
+        }
+        .alert(
+            "Remove from Watchlist?",
+            isPresented: Binding(
+                get: { watchlistEntryPendingDelete != nil },
+                set: { if !$0 { watchlistEntryPendingDelete = nil } }
+            )
+        ) {
+            Button("Cancel", role: .cancel) { watchlistEntryPendingDelete = nil }
+            Button("Remove", role: .destructive) {
+                if let entry = watchlistEntryPendingDelete {
+                    Task { await vm.removeFromWatchlist(entry: entry) }
+                }
+                watchlistEntryPendingDelete = nil
+            }
+        }
+        .alert(
+            "Remove from this list?",
+            isPresented: Binding(
+                get: { listItemPendingDelete != nil },
+                set: { if !$0 { listItemPendingDelete = nil } }
+            )
+        ) {
+            Button("Cancel", role: .cancel) { listItemPendingDelete = nil }
+            Button("Remove", role: .destructive) {
+                if let item = listItemPendingDelete {
+                    Task { await vm.removeFromList(item) }
+                }
+                listItemPendingDelete = nil
+            }
+        }
     }
 
     // MARK: Tab Switcher
@@ -223,6 +289,14 @@ struct ListsView: View {
                             selection = .custom(list.id)
                             Task { await vm.loadItems(for: list) }
                         }
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                listPendingDelete = list
+                            } label: {
+                                Label("Delete List", systemImage: "trash")
+                            }
+                        }
+                        .sensoryFeedback(.impact(weight: .medium), trigger: listPendingDelete == list)
                     }
                 }
                 .padding(.leading, 20)
@@ -239,6 +313,7 @@ struct ListsView: View {
                     .background(WarmTheme.chipBackground)
                     .clipShape(Circle())
             }
+            .accessibilityLabel("Create List")
             .padding(.trailing, 20)
         }
         .padding(.bottom, 14)
@@ -317,6 +392,13 @@ struct ListsView: View {
                                 }
                             }
                         }
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                watchlistEntryPendingDelete = entry
+                            } label: {
+                                Label("Remove", systemImage: "trash")
+                            }
+                        }
                         rowDivider(isLast: index == vm.watchlistItems.count - 1)
                     }
                 }
@@ -343,6 +425,13 @@ struct ListsView: View {
                                     await vm.rankFilm(tmdbID: item.tmdbID, mediaType: item.mediaType, userID: appState.currentUser?.id)
                                     showRanking = true
                                 }
+                            }
+                        }
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                listItemPendingDelete = item
+                            } label: {
+                                Label("Remove", systemImage: "trash")
                             }
                         }
                         rowDivider(isLast: index == items.count - 1)
