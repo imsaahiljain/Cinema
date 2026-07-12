@@ -43,7 +43,7 @@ final class CinemaUITests: XCTestCase {
 
     func testLists() throws {
         login()
-        app.buttons["Numbered List"].tap()
+        app.buttons["Lists"].tap()
         pause()
     }
 
@@ -54,7 +54,7 @@ final class CinemaUITests: XCTestCase {
 
     func testDeleteCustomList() throws {
         login()
-        app.buttons["Numbered List"].tap()
+        app.buttons["Lists"].tap()
 
         let plusButton = app.buttons["Create List"]
         XCTAssertTrue(plusButton.waitForExistence(timeout: 5))
@@ -88,7 +88,7 @@ final class CinemaUITests: XCTestCase {
     /// failed runs of testDeleteCustomList while that flow was being fixed.
     func testCleanupStrayLists() throws {
         login()
-        app.buttons["Numbered List"].tap()
+        app.buttons["Lists"].tap()
 
         while true {
             let strayPill = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Delete Me '")).firstMatch
@@ -102,6 +102,23 @@ final class CinemaUITests: XCTestCase {
             confirm.tap()
             Thread.sleep(forTimeInterval: 1.0)
         }
+    }
+
+    func testScorePreviewToggle() throws {
+        login()
+        app.buttons["Profile"].tap()
+
+        let settingsButton = app.buttons["Settings"]
+        XCTAssertTrue(settingsButton.waitForExistence(timeout: 5))
+        settingsButton.tap()
+
+        let toggle = app.switches["Rankings Score Preview Toggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        toggle.tap()
+
+        app.buttons["Done"].tap()
+        app.buttons["Lists"].tap()
+        pause()
     }
 
     func testSwipeCommitsPick() throws {

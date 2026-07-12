@@ -191,6 +191,7 @@ struct ListsView: View {
     @State private var listPendingDelete: CustomList?
     @State private var watchlistEntryPendingDelete: WatchlistEntry?
     @State private var listItemPendingDelete: ListItem?
+    @AppStorage("cinema_dev_scores_unlocked") private var devScoresUnlocked = false
 
     var body: some View {
         ZStack {
@@ -285,9 +286,9 @@ struct ListsView: View {
 
     private var miniHeader: some View {
         HStack {
-            Text("Lists")
-                .font(WarmTheme.Font.bodyBold(15))
-                .foregroundStyle(WarmTheme.nameText)
+            Text("My Lists")
+                .font(WarmTheme.Font.wordmarkBold(22))
+                .foregroundStyle(WarmTheme.titleText)
             Spacer()
         }
         .padding(.horizontal, 20)
@@ -360,7 +361,7 @@ struct ListsView: View {
         } else if vm.rankedItems.isEmpty {
             EmptyStateView(message: "Rank your first film to start your list.")
         } else {
-            let unlocked = vm.rankedItems.count >= scoresUnlockThreshold
+            let unlocked = devScoresUnlocked || vm.rankedItems.count >= scoresUnlockThreshold
             ScrollView {
                 LazyVStack(spacing: 0) {
                     if !unlocked {

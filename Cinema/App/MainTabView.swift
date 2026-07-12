@@ -6,23 +6,23 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             FeedMarqueeView()
-                .tabItem { Image(systemName: "popcorn.fill") }
+                .tabItem { Image(systemName: "popcorn.fill").accessibilityLabel("Feed") }
                 .tag(0)
 
             ListsView()
-                .tabItem { Image(systemName: "list.number") }
+                .tabItem { Image(systemName: "list.number").accessibilityLabel("Lists") }
                 .tag(1)
 
             SearchView()
-                .tabItem { Image(systemName: "magnifyingglass") }
+                .tabItem { Image(systemName: "magnifyingglass").accessibilityLabel("Search") }
                 .tag(2)
 
             DiscoverView()
-                .tabItem { Image(systemName: "sparkles") }
+                .tabItem { Image(systemName: "sparkles").accessibilityLabel("Discover") }
                 .tag(3)
 
             ProfileView()
-                .tabItem { Image(systemName: "person.fill") }
+                .tabItem { Image(systemName: "person.fill").accessibilityLabel("Profile") }
                 .tag(4)
         }
         .tint(CinemaTheme.Colors.gold)

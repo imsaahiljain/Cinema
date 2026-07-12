@@ -163,6 +163,7 @@ struct ProfileView: View {
                             .foregroundStyle(CinemaTheme.Colors.textSecondary)
                             .frame(width: 44, height: 44)
                     }
+                    .accessibilityLabel("Settings")
                     .padding(.trailing, 10)
                 }
                 .padding(.top, 8)
@@ -413,6 +414,7 @@ struct ProfileView: View {
 struct SettingsView: View {
     let appState: AppState
     @AppStorage("cinema_dev_fingerprint") private var devFingerprintUnlocked = false
+    @AppStorage("cinema_dev_scores_unlocked") private var devScoresUnlocked = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -464,6 +466,34 @@ struct SettingsView: View {
                                     Toggle("", isOn: $devFingerprintUnlocked)
                                         .tint(CinemaTheme.Colors.gold)
                                         .labelsHidden()
+                                }
+                                .padding(.horizontal, CinemaTheme.Spacing.lg)
+                                .padding(.vertical, 12)
+
+                                Divider().background(CinemaTheme.Colors.border).padding(.leading, 60)
+
+                                HStack(spacing: 14) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 7)
+                                            .fill(Color.purple)
+                                            .frame(width: 32, height: 32)
+                                        Image(systemName: "star.circle.fill")
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundStyle(.white)
+                                    }
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Rankings Score Preview")
+                                            .font(.system(size: 16))
+                                            .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                                        Text("Shows scores early — bypasses 10-film gate")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                                    }
+                                    Spacer()
+                                    Toggle("", isOn: $devScoresUnlocked)
+                                        .tint(CinemaTheme.Colors.gold)
+                                        .labelsHidden()
+                                        .accessibilityLabel("Rankings Score Preview Toggle")
                                 }
                                 .padding(.horizontal, CinemaTheme.Spacing.lg)
                                 .padding(.vertical, 12)
