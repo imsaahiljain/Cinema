@@ -52,6 +52,14 @@ enum ListsTab: String, CaseIterable {
     case lists = "Lists"
 }
 
+// Matches the existing 10-Movie Wall onboarding gate — by the time someone
+// can even reach this tab they've already crossed it, so scores are
+// unlocked in the normal flow. This only matters for accounts seeded
+// outside onboarding (QA, dev). Below 10, the rank-based /10 formula's
+// endpoints (#1 = 10.0, last place = 0.0) swing too hard between just a
+// couple of films to read as a real score rather than a glitch.
+private let scoresUnlockThreshold = 10
+
 struct ListsView: View {
     @Environment(AppState.self) private var appState
     @State private var vm = ListsViewModel()
@@ -129,14 +137,19 @@ struct ListsView: View {
         } else if vm.rankedItems.isEmpty {
             ComingSoonListView(message: "Rank your first film to start your list.")
         } else {
+            let unlocked = vm.rankedItems.count >= scoresUnlockThreshold
             ScrollView {
                 LazyVStack(spacing: 0) {
+                    if !unlocked {
+                        ScoresLockedHint(rankedCount: vm.rankedItems.count, threshold: scoresUnlockThreshold)
+                    }
                     ForEach(Array(vm.rankedItems.enumerated()), id: \.element.id) { index, item in
                         RankedRow(
                             rank: index + 1,
                             media: vm.films[item.tmdbID],
                             tmdbID: item.tmdbID,
-                            score: ratingOutOf10(rankPosition: index + 1, totalRanked: vm.rankedItems.count)
+                            score: ratingOutOf10(rankPosition: index + 1, totalRanked: vm.rankedItems.count),
+                            scoreVisible: unlocked
                         )
                         if index < vm.rankedItems.count - 1 {
                             Rectangle()
@@ -153,6 +166,34 @@ struct ListsView: View {
     }
 }
 
+// MARK: - Scores Locked Hint
+
+private struct ScoresLockedHint: View {
+    let rankedCount: Int
+    let threshold: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Rank \(threshold - rankedCount) more film\(threshold - rankedCount == 1 ? "" : "s") to reveal scores.")
+                .font(WarmTheme.Font.body(13))
+                .foregroundStyle(WarmTheme.secondaryText)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(WarmTheme.chipBackground)
+                        .frame(height: 3)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(WarmTheme.accent)
+                        .frame(width: geo.size.width * min(CGFloat(rankedCount) / CGFloat(threshold), 1.0), height: 3)
+                }
+            }
+            .frame(height: 3)
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
+    }
+}
+
 // MARK: - Ranked Row
 
 private struct RankedRow: View {
@@ -160,6 +201,7 @@ private struct RankedRow: View {
     let media: MediaItem?
     let tmdbID: Int
     let score: Double
+    let scoreVisible: Bool
 
     private var rankColor: Color { rank <= 3 ? WarmTheme.accent : WarmTheme.titleText }
 
@@ -188,12 +230,14 @@ private struct RankedRow: View {
 
             Spacer(minLength: 8)
 
-            Text(String(format: "%.1f", score))
-                .font(WarmTheme.Font.bodyBold(13))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(WarmTheme.accent, in: RoundedRectangle(cornerRadius: 8))
+            if scoreVisible {
+                Text(String(format: "%.1f", score))
+                    .font(WarmTheme.Font.bodyBold(13))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(WarmTheme.accent, in: RoundedRectangle(cornerRadius: 8))
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
