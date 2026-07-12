@@ -120,17 +120,6 @@ final class SearchViewModel {
         } catch {}
     }
 
-    func addToWatchlist(item: MediaItem, userID: UUID?) async {
-        guard let userID else { return }
-        do {
-            try await SupabaseClient.shared.from("watchlist")
-                .upsert(["user_id": userID.uuidString, "tmdb_id": String(item.id),
-                         "media_type": item.mediaType.rawValue])
-                .execute()
-            watchlistIDs.insert(item.id)
-        } catch {}
-    }
-
     func toggleFollow(user: CinemaUser, currentUserID: UUID?) async {
         guard let currentUserID else { return }
         if followedIDs.contains(user.id) {
@@ -160,6 +149,7 @@ struct SearchView: View {
     @State private var selectedFilm: MediaItem?
     @State private var selectedUser: CinemaUser?
     @State private var showRanking = false
+    @State private var addToListItem: MediaItem?
 
     private var sectionTitle: String {
         guard let id = vm.selectedGenreID else { return "Trending" }
@@ -201,6 +191,11 @@ struct SearchView: View {
         }
         .sheet(item: $selectedFilm) { MovieInfoView(film: $0) }
         .fullScreenCover(isPresented: $showRanking) { RankingView() }
+        .sheet(item: $addToListItem, onDismiss: {
+            Task { await vm.loadUserLists(userID: appState.currentUser?.id) }
+        }) { item in
+            AddToListSheet(tmdbID: item.id, mediaType: item.mediaType, userID: appState.currentUser?.id)
+        }
         .sheet(item: $selectedUser) { user in
             NavigationStack {
                 UserProfileView(user: user)
@@ -408,7 +403,7 @@ struct SearchView: View {
                                     if !alreadyAdded && vm.addedIDs.count >= 2 { showRanking = true }
                                 }
                             },
-                            onWatchlist: { Task { await vm.addToWatchlist(item: item, userID: appState.currentUser?.id) } }
+                            onWatchlist: { addToListItem = item }
                         )
                         Divider()
                             .background(CinemaTheme.Colors.border)
@@ -490,38 +485,10 @@ private struct FilmResultRow: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
-                    HStack(spacing: 5) {
-                        if let year = item.releaseYear {
-                            Text(year)
-                                .font(.system(size: 13))
-                                .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                            Text("·")
-                                .font(.system(size: 13))
-                                .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.4))
-                        }
-                        Text(item.mediaType == .movie ? "Film" : "TV")
-                            .font(.system(size: 13))
-                            .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                        if let genre = item.genreNames.first {
-                            Text("·")
-                                .font(.system(size: 13))
-                                .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.4))
-                            Text(genre)
-                                .font(.system(size: 13))
-                                .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                        }
-                        if let rating = item.voteAverage, rating > 0 {
-                            Text("·")
-                                .font(.system(size: 13))
-                                .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.4))
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 9))
-                                .foregroundStyle(CinemaTheme.Colors.gold)
-                            Text(String(format: "%.1f", rating))
-                                .font(.system(size: 13))
-                                .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                        }
-                    }
+                    metadataLine
+                        .font(.system(size: 13))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
 
                 Spacer(minLength: 8)
@@ -534,11 +501,13 @@ private struct FilmResultRow: View {
                                 isWatchlisted ? CinemaTheme.Colors.gold : CinemaTheme.Colors.textSecondary
                             )
                     }
+                    .accessibilityLabel("Add to List")
                     Button(action: onAdd) {
-                        Image(systemName: isAdded ? "checkmark.circle.fill" : "plus.circle")
-                            .font(.system(size: 26))
+                        Image(systemName: isAdded ? "checkmark.circle.fill" : "rectangle.split.2x1")
+                            .font(.system(size: isAdded ? 26 : 22))
                             .foregroundStyle(isAdded ? Color.green : CinemaTheme.Colors.gold)
                     }
+                    .accessibilityLabel(isAdded ? "Ranked" : "Rank This or That")
                 }
             }
             .padding(.horizontal, 20)
@@ -546,6 +515,27 @@ private struct FilmResultRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// Single truncating Text (not a row of separate Text/Image views) so a squeezed row
+    /// ellipsizes cleanly instead of wrapping mid-word — an HStack of independent Text
+    /// elements has no shared truncation and can break a word like "Animation" across lines.
+    private var metadataLine: Text {
+        var segments: [Text] = []
+        if let year = item.releaseYear {
+            segments.append(Text(year).foregroundStyle(CinemaTheme.Colors.textSecondary))
+        }
+        segments.append(Text(item.mediaType == .movie ? "Film" : "TV").foregroundStyle(CinemaTheme.Colors.textSecondary))
+        if let genre = item.genreNames.first {
+            segments.append(Text(genre).foregroundStyle(CinemaTheme.Colors.textSecondary))
+        }
+        if let rating = item.voteAverage, rating > 0 {
+            let star = Text(Image(systemName: "star.fill")).foregroundStyle(CinemaTheme.Colors.gold)
+            let value = Text(" " + String(format: "%.1f", rating)).foregroundStyle(CinemaTheme.Colors.textSecondary)
+            segments.append(star + value)
+        }
+        let dot = Text(" · ").foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.4))
+        return segments.dropFirst().reduce(segments.first ?? Text("")) { $0 + dot + $1 }
     }
 }
 

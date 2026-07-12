@@ -597,7 +597,8 @@ private struct EmptyStateView: View {
 
 // MARK: - Create List Sheet
 
-private struct CreateListSheet: View {
+/// Not private — reused by AddToListSheet.swift (Search's "Add to List" flow) for inline list creation.
+struct CreateListSheet: View {
     let onCreate: (String) async -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""

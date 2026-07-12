@@ -147,6 +147,26 @@ final class CinemaUITests: XCTestCase {
         pause()
     }
 
+    func testSearchAddToListSheet() throws {
+        login()
+        app.buttons["Search"].tap()
+
+        let searchField = app.textFields["Films, people..."]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.tap()
+        searchField.typeText("Minion")
+
+        let firstBookmark = app.buttons["Add to List"].firstMatch
+        XCTAssertTrue(firstBookmark.waitForExistence(timeout: 5))
+        firstBookmark.tap()
+
+        let watchlistRow = app.buttons["Watchlist"]
+        XCTAssertTrue(watchlistRow.waitForExistence(timeout: 5))
+        watchlistRow.tap()
+        app.buttons["Done"].tap()
+        pause()
+    }
+
     func testSwipeCommitsPick() throws {
         XCTAssertTrue(app.staticTexts["0"].waitForExistence(timeout: 5))
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
