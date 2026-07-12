@@ -6,6 +6,9 @@ Whenever a change like this gets decided or built, add an entry here (newest on 
 
 ---
 
+**2026-07-11 — Lists screen: no headline, "+" to create your own**
+Dropped the big "Rankings" title/subtitle — the tab switcher alone carries context, closer to how Beli treats its list tabs as plain furniture rather than a decorated headline. Replaced the fixed Watched/Watchlist/Lists three-way switcher with a horizontally scrolling row (Watched, Watchlist, then one pill per list you've made) and a fixed "+" button top-right to create a new one on the spot — scrolls sideways once you have more lists than fit on screen instead of hiding them behind a menu.
+
 **2026-07-11 — Scores stay hidden until you've ranked 10 films**
 Below 10 ranked films, the Rankings screen shows a "Rank N more films to reveal scores" progress hint instead of score badges — rank position, poster, and title still show immediately. Reason: the rank-based /10 formula always puts #1 at a flat 10.0 and last place at a flat 0.0 no matter how many films are ranked, and with only a couple films that reads as broken rather than earned. 10 was picked to match the app's existing 10-Movie Wall onboarding gate rather than invent a second arbitrary number — everyone who reaches this tab through normal onboarding has already cleared it, so in practice this only shows for accounts seeded outside onboarding (QA/dev).
 
