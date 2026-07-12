@@ -32,6 +32,33 @@ enum WarmTheme {
     }
 }
 
+// MARK: - Screen Title
+//
+// The standard top-of-screen label for warm-palette screens (Lists, and any
+// future screen in this palette) — confirmed as the look to reuse (2026-07-11)
+// after landing on it for the Lists screen's "My Lists" header. Deliberately
+// modest: a label + breathing room, not a big decorative headline.
+
+struct ScreenTitle: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        HStack {
+            Text(text)
+                .font(WarmTheme.Font.wordmarkBold(22))
+                .foregroundStyle(WarmTheme.titleText)
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 12)
+    }
+}
+
 // MARK: - Poster placeholder (diagonal stripe, stands in for real poster art)
 //
 // Used both as the design mockup's literal placeholder look and as the

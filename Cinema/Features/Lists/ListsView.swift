@@ -198,7 +198,7 @@ struct ListsView: View {
             WarmTheme.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                miniHeader
+                ScreenTitle("My Lists")
                 tabSwitcher
 
                 switch selection {
@@ -275,25 +275,6 @@ struct ListsView: View {
                 listItemPendingDelete = nil
             }
         }
-    }
-
-    // MARK: Mini Header
-    //
-    // Not a return to the old big "Rankings" headline — that was removed on
-    // purpose. This is just enough of a label + breathing room so the tab
-    // switcher isn't sitting flush against the safe area, closer to how
-    // Beli gives "MY LISTS" a quiet caption rather than no header at all.
-
-    private var miniHeader: some View {
-        HStack {
-            Text("My Lists")
-                .font(WarmTheme.Font.wordmarkBold(22))
-                .foregroundStyle(WarmTheme.titleText)
-            Spacer()
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 14)
-        .padding(.bottom, 12)
     }
 
     // MARK: Tab Switcher
