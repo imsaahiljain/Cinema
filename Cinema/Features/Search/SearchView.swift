@@ -29,12 +29,18 @@ final class SearchViewModel {
 
     var isQueryEmpty: Bool { query.trimmingCharacters(in: .whitespaces).isEmpty }
 
+    /// Genre chip filtering applied on top of typed search results (TMDB's search endpoints don't
+    /// accept a genre param, so this filters the already-fetched `results` client-side rather than
+    /// re-querying — `genreResults`/`browseGenre` remain the idle-browse path, driven by `discover`).
+    var displayedResults: [MediaItem] {
+        guard let id = selectedGenreID, let name = quickGenres.first(where: { $0.id == id })?.name else { return results }
+        return results.filter { $0.genreNames.contains(name) }
+    }
+
     private var searchTask: Task<Void, Never>?
 
     func onQueryChange() {
         searchTask?.cancel()
-        selectedGenreID = nil
-        genreResults = []
         guard !isQueryEmpty else { results = []; peopleResults = []; return }
         searchTask = Task {
             try? await Task.sleep(for: .milliseconds(300))
@@ -178,6 +184,11 @@ struct SearchView: View {
                     idleContent
                 } else {
                     segmentControl
+                    if vm.segment == .films {
+                        genreChips
+                            .padding(.top, 12)
+                            .padding(.bottom, 12)
+                    }
                     Divider().background(CinemaTheme.Colors.border)
                     if vm.segment == .films { filmResults }
                     else { peopleResults }
@@ -377,12 +388,14 @@ struct SearchView: View {
 
     @ViewBuilder
     private var filmResults: some View {
-        if vm.results.isEmpty {
-            emptyState(icon: "film", message: "No results for \"\(vm.query)\"")
+        if vm.displayedResults.isEmpty {
+            let genreLabel = vm.selectedGenreID.flatMap { id in vm.quickGenres.first { $0.id == id }?.name }
+            let message = genreLabel.map { "No \($0) results for \"\(vm.query)\"" } ?? "No results for \"\(vm.query)\""
+            emptyState(icon: "film", message: message)
         } else {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 0) {
-                    ForEach(vm.results) { item in
+                    ForEach(vm.displayedResults) { item in
                         FilmResultRow(
                             item: item,
                             isAdded: vm.addedIDs.contains(item.id),
@@ -494,6 +507,17 @@ private struct FilmResultRow: View {
                                 .font(.system(size: 13))
                                 .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.4))
                             Text(genre)
+                                .font(.system(size: 13))
+                                .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                        }
+                        if let rating = item.voteAverage, rating > 0 {
+                            Text("·")
+                                .font(.system(size: 13))
+                                .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.4))
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(CinemaTheme.Colors.gold)
+                            Text(String(format: "%.1f", rating))
                                 .font(.system(size: 13))
                                 .foregroundStyle(CinemaTheme.Colors.textSecondary)
                         }
