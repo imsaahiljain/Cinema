@@ -6,7 +6,10 @@ Whenever a change like this gets decided or built, add an entry here (newest on 
 
 ---
 
-**2026-07-09 — Score color-coding by band** *(decided, not yet built)*
+**2026-07-11 — Rankings screen: warm cream/serif redesign**
+Replaced the old dark/gold flat list with a "Rankings" screen built from a real design handoff — cream background, Libre Caslon serif for titles, brick-red accent, rank numbers colored for the top 3 only. Real TMDB posters, same design language as the Marquee feed (shared in `WarmTheme.swift` so the two screens can't drift apart). A `Watched | Watchlist | Lists` pill switcher replaces the flat single list — Watchlist and custom Lists are placeholders until their backend exists. *(Note: this uses one flat accent-red color for every score badge, which conflicts with the "score color-coding by band" idea below — still needs a decision, see Open Action Items conversation.)*
+
+**2026-07-09 — Score color-coding by band** *(decided, not yet built — now conflicts with the shipped Rankings design, needs revisiting)*
 Ranked-item scores won't just be a flat gold number — they'll shift color by how good the score is: green above 8, yellow 5–8, red below 5. Makes a glance at the list tell a story instead of just a stat. Comes up when the redesigned Lists/Ranked screen gets built.
 
 **2026-07-09 — "Rank it" promotion flow (Want to Watch → Ranked)**
