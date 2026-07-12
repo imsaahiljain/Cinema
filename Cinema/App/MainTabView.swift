@@ -9,7 +9,7 @@ struct MainTabView: View {
                 .tabItem { Image(systemName: "popcorn.fill") }
                 .tag(0)
 
-            MyFilmsView()
+            ListsView()
                 .tabItem { Image(systemName: "list.number") }
                 .tag(1)
 

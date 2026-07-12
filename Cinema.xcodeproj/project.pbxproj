@@ -10,6 +10,7 @@
 		00E9C31760999F85B1EFCDD2 /* FeedPrototypeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06B73F937BD0A805881C7560 /* FeedPrototypeView.swift */; };
 		0882FC922D15144F6CAE4C9C /* RankingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 346682FA060F15CE0C72B7BF /* RankingView.swift */; };
 		0AA3EA0AD48B8314A5F4809B /* ELOService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D937843E51844F3C60087C3C /* ELOService.swift */; };
+		12AF8C29F544B41FA08E1764 /* WarmTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF80799BE693BDEF37186455 /* WarmTheme.swift */; };
 		3129177F461F125D7D0EEF26 /* NunitoSans-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B42F0F367D8E746801C20F66 /* NunitoSans-Regular.ttf */; };
 		34A8E9FFF570172A75CB7ED0 /* FeedMarqueeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC5825B60F12C184BAD3F41C /* FeedMarqueeView.swift */; };
 		38C68A492E7B13910AA386D4 /* RankingPrototypeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D21685CB405D619BE0A1A89 /* RankingPrototypeView.swift */; };
@@ -23,6 +24,7 @@
 		59606C18B058A3EA2FF7817C /* TMDBClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD02B3CF21F04A2669A89234 /* TMDBClient.swift */; };
 		5B44A725C520A94C18B799D3 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1981E84705ED6DF978BDCF98 /* Log.swift */; };
 		677151F79942E0B4FED24F67 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3DA5F7D1A0859DF4CEB3703 /* DiscoverView.swift */; };
+		682A089F56AA1DD388E3383D /* ListsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530C7F0DB52CAC3077C9CD1F /* ListsView.swift */; };
 		71F4E38D958B04CF4095E790 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19DC63385B01DB8197C52FB5 /* SearchView.swift */; };
 		77EC1A99DEF36338EEB17EBC /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 083082767AFFFA05A82D3F8A /* SupabaseClient.swift */; };
 		7C4CA3F23C3A5C425A37375D /* GlassCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400E820CB0EC0231B9067CF3 /* GlassCard.swift */; };
@@ -67,6 +69,7 @@
 		400E820CB0EC0231B9067CF3 /* GlassCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCard.swift; sourceTree = "<group>"; };
 		479F67E8B319479E66ACF14A /* DiagonalOverarchWinEffect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagonalOverarchWinEffect.swift; sourceTree = "<group>"; };
 		47C9836D650B8F37B4803907 /* LibreCaslonText-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "LibreCaslonText-Bold.ttf"; sourceTree = "<group>"; };
+		530C7F0DB52CAC3077C9CD1F /* ListsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListsView.swift; sourceTree = "<group>"; };
 		5D21685CB405D619BE0A1A89 /* RankingPrototypeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingPrototypeView.swift; sourceTree = "<group>"; };
 		716F3EF3F2B0C5963A9A3BA9 /* CinemaUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CinemaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		82ECD83DF5DBD40D16BCE440 /* NunitoSans-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "NunitoSans-Bold.ttf"; sourceTree = "<group>"; };
@@ -88,6 +91,7 @@
 		E94966236921CC6C34C05081 /* Cinema.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Cinema.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EB623A11E101E67864FA95BD /* MediaItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaItem.swift; sourceTree = "<group>"; };
 		EC5825B60F12C184BAD3F41C /* FeedMarqueeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedMarqueeView.swift; sourceTree = "<group>"; };
+		EF80799BE693BDEF37186455 /* WarmTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarmTheme.swift; sourceTree = "<group>"; };
 		FD02B3CF21F04A2669A89234 /* TMDBClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TMDBClient.swift; sourceTree = "<group>"; };
 		FEDF737AB14A01612CDDBC73 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -233,6 +237,14 @@
 			path = Onboarding;
 			sourceTree = "<group>";
 		};
+		ABCC2130F2D5130C827EE7BD /* Lists */ = {
+			isa = PBXGroup;
+			children = (
+				530C7F0DB52CAC3077C9CD1F /* ListsView.swift */,
+			);
+			path = Lists;
+			sourceTree = "<group>";
+		};
 		BF4DCC654977402A5D544E74 /* Feed */ = {
 			isa = PBXGroup;
 			children = (
@@ -284,6 +296,7 @@
 			children = (
 				19B6FE300EFDFCFD23526BD3 /* CinemaTheme.swift */,
 				400E820CB0EC0231B9067CF3 /* GlassCard.swift */,
+				EF80799BE693BDEF37186455 /* WarmTheme.swift */,
 			);
 			path = DesignSystem;
 			sourceTree = "<group>";
@@ -295,6 +308,7 @@
 				83DFDCB80E4EA2B4E9495E05 /* Discover */,
 				BF4DCC654977402A5D544E74 /* Feed */,
 				3A988DB1C5CC47FBFC95FF41 /* Leaderboard */,
+				ABCC2130F2D5130C827EE7BD /* Lists */,
 				A46E42E57ABDBCE2980700F0 /* Onboarding */,
 				CD887A9EDC6F5BB11B3C7437 /* Profile */,
 				00C6D9986360B76AB486F377 /* Ranking */,
@@ -438,6 +452,7 @@
 				9A9CFC8A976D1B49E20FD6F6 /* FeedView.swift in Sources */,
 				7C4CA3F23C3A5C425A37375D /* GlassCard.swift in Sources */,
 				544A035FB40C0037B07E26DE /* LeaderboardView.swift in Sources */,
+				682A089F56AA1DD388E3383D /* ListsView.swift in Sources */,
 				5B44A725C520A94C18B799D3 /* Log.swift in Sources */,
 				EAEBD73332734E8C8697F037 /* MainTabView.swift in Sources */,
 				B0092C52AE699944D988F4F3 /* MediaItem.swift in Sources */,
@@ -451,6 +466,7 @@
 				9508C0F2E6498FBEDF0C149B /* Secrets.swift in Sources */,
 				77EC1A99DEF36338EEB17EBC /* SupabaseClient.swift in Sources */,
 				59606C18B058A3EA2FF7817C /* TMDBClient.swift in Sources */,
+				12AF8C29F544B41FA08E1764 /* WarmTheme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

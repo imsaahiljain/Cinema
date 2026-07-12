@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Caslon+Text&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: #eeece6; font-family: 'Nunito Sans', sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  </style>
+</helmet>
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402,874">
+  <x-import component="RankTabsNumbered" from="./popcorn-scenes.jsx" hint-size="100%,100%"></x-import>
+</x-import>
+
+</x-dc>
+</body>
+</html>

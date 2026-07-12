@@ -25,29 +25,6 @@ func ratingOutOf10(rankPosition: Int, totalRanked: Int) -> Double {
     return 10 * (1 - fraction)
 }
 
-// MARK: - Theme (exact tokens from the design handoff, converted from OKLCH to sRGB)
-
-private enum MarqueeTheme {
-    static let background = Color(red: 249 / 255, green: 240 / 255, blue: 231 / 255)
-    static let cardBackground = Color.white
-    static let wordmark = Color(red: 64 / 255, green: 46 / 255, blue: 39 / 255)
-    static let titleText = Color(red: 42 / 255, green: 30 / 255, blue: 26 / 255)
-    static let nameText = Color(red: 82 / 255, green: 68 / 255, blue: 64 / 255)
-    static let secondaryText = Color(red: 110 / 255, green: 96 / 255, blue: 91 / 255)
-    static let tertiaryText = Color(red: 139 / 255, green: 124 / 255, blue: 119 / 255)
-    static let captionText = Color(red: 68 / 255, green: 55 / 255, blue: 51 / 255)
-    static let accent = Color(red: 197 / 255, green: 56 / 255, blue: 41 / 255)
-    static let tagText = Color(red: 144 / 255, green: 83 / 255, blue: 0 / 255)
-    static let tagBackground = Color(red: 251 / 255, green: 233 / 255, blue: 198 / 255)
-    enum Font {
-        static func wordmark(_ size: CGFloat) -> SwiftUI.Font { .custom("LibreCaslonText-Regular", size: size) }
-        static func wordmarkBold(_ size: CGFloat) -> SwiftUI.Font { .custom("LibreCaslonText-Bold", size: size) }
-        static func body(_ size: CGFloat) -> SwiftUI.Font { .custom("NunitoSans-Regular", size: size) }
-        static func bodySemiBold(_ size: CGFloat) -> SwiftUI.Font { .custom("NunitoSansSemiBold-Regular", size: size) }
-        static func bodyBold(_ size: CGFloat) -> SwiftUI.Font { .custom("NunitoSans-Bold", size: size) }
-    }
-}
-
 // MARK: - Mock data
 
 private struct MockPop: Identifiable {
@@ -174,7 +151,7 @@ struct FeedMarqueeView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 32)
         }
-        .background(MarqueeTheme.background.ignoresSafeArea())
+        .background(WarmTheme.background.ignoresSafeArea())
         .scrollContentBackground(.hidden)
         .sheet(item: $selectedFilm) { film in
             MovieInfoView(film: film)
@@ -195,16 +172,16 @@ struct FeedMarqueeView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Popcorn")
-                .font(MarqueeTheme.Font.wordmark(30))
-                .foregroundStyle(MarqueeTheme.wordmark)
+                .font(WarmTheme.Font.wordmark(30))
+                .foregroundStyle(WarmTheme.wordmark)
             Text("What your friends are watching")
-                .font(MarqueeTheme.Font.body(12))
-                .foregroundStyle(MarqueeTheme.secondaryText)
+                .font(WarmTheme.Font.body(12))
+                .foregroundStyle(WarmTheme.secondaryText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 12)
         .padding(.bottom, 12)
-        .background(MarqueeTheme.background)
+        .background(WarmTheme.background)
     }
 }
 
@@ -253,30 +230,30 @@ private struct PopCard: View {
                 HStack(spacing: 8) {
                     InitialsAvatar(name: pop.friend, color: pop.avatarColor, size: 22)
                     Text(pop.friend)
-                        .font(MarqueeTheme.Font.bodyBold(12.5))
-                        .foregroundStyle(MarqueeTheme.nameText)
+                        .font(WarmTheme.Font.bodyBold(12.5))
+                        .foregroundStyle(WarmTheme.nameText)
                     Text("· \(pop.time)")
-                        .font(MarqueeTheme.Font.body(11.5))
-                        .foregroundStyle(MarqueeTheme.tertiaryText)
+                        .font(WarmTheme.Font.body(11.5))
+                        .foregroundStyle(WarmTheme.tertiaryText)
                 }
 
                 HStack(alignment: .firstTextBaseline) {
                     Text(pop.movie)
-                        .font(MarqueeTheme.Font.wordmark(19))
-                        .foregroundStyle(MarqueeTheme.titleText)
+                        .font(WarmTheme.Font.wordmark(19))
+                        .foregroundStyle(WarmTheme.titleText)
                         .lineLimit(2)
                     Spacer(minLength: 8)
                     Text(pop.ratingLabel)
-                        .font(MarqueeTheme.Font.wordmarkBold(15))
+                        .font(WarmTheme.Font.wordmarkBold(15))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
-                        .background(MarqueeTheme.accent, in: RoundedRectangle(cornerRadius: 8))
+                        .background(WarmTheme.accent, in: RoundedRectangle(cornerRadius: 8))
                 }
 
                 Text(pop.caption)
-                    .font(MarqueeTheme.Font.body(13.5))
-                    .foregroundStyle(MarqueeTheme.captionText)
+                    .font(WarmTheme.Font.body(13.5))
+                    .foregroundStyle(WarmTheme.captionText)
                     .lineLimit(isExpanded ? nil : 2)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -284,11 +261,11 @@ private struct PopCard: View {
                     HStack(spacing: 6) {
                         ForEach(pop.tags, id: \.self) { tag in
                             Text(tag)
-                                .font(MarqueeTheme.Font.bodySemiBold(11))
-                                .foregroundStyle(MarqueeTheme.tagText)
+                                .font(WarmTheme.Font.bodySemiBold(11))
+                                .foregroundStyle(WarmTheme.tagText)
                                 .padding(.horizontal, 9)
                                 .padding(.vertical, 3)
-                                .background(MarqueeTheme.tagBackground, in: Capsule())
+                                .background(WarmTheme.tagBackground, in: Capsule())
                         }
                     }
                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -298,12 +275,12 @@ private struct PopCard: View {
                     ReactionButton(
                         outlineSymbol: "heart", filledSymbol: "heart.fill",
                         count: pop.likes + (isLiked ? 1 : 0), isActive: isLiked,
-                        activeColor: MarqueeTheme.accent, onTap: onLikeTap
+                        activeColor: WarmTheme.accent, onTap: onLikeTap
                     )
                     ReactionButton(
                         outlineSymbol: "bubble.right", filledSymbol: "bubble.right.fill",
                         count: pop.comments, isActive: false,
-                        activeColor: MarqueeTheme.accent, onTap: {}
+                        activeColor: WarmTheme.accent, onTap: {}
                     )
                 }
             }
@@ -317,7 +294,7 @@ private struct PopCard: View {
             .contentShape(Rectangle())
             .onTapGesture(perform: onExpandTap)
         }
-        .background(MarqueeTheme.cardBackground)
+        .background(WarmTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: Color(red: 60/255, green: 30/255, blue: 10/255).opacity(0.06), radius: 1, x: 0, y: 1)
         .shadow(color: Color(red: 60/255, green: 30/255, blue: 10/255).opacity(0.08), radius: 10, x: 0, y: 6)
@@ -363,48 +340,13 @@ private struct ReactionButton: View {
                 Image(systemName: isActive ? filledSymbol : outlineSymbol)
                     .font(.system(size: 14, weight: .regular))
                 Text("\(count)")
-                    .font(MarqueeTheme.Font.bodySemiBold(12))
+                    .font(WarmTheme.Font.bodySemiBold(12))
             }
-            .foregroundStyle(isActive ? activeColor : MarqueeTheme.secondaryText)
+            .foregroundStyle(isActive ? activeColor : WarmTheme.secondaryText)
         }
         .buttonStyle(.plain)
         .scaleEffect(isActive ? 1.1 : 1.0)
         .sensoryFeedback(.impact(weight: .light), trigger: isActive)
-    }
-}
-
-// MARK: - Poster placeholder (diagonal stripe, stands in for real poster art)
-
-private struct PosterPlaceholder: View {
-    let dark: Color
-    let darker: Color
-
-    var body: some View {
-        GeometryReader { geo in
-            let stripeWidth: CGFloat = 10
-            let diagonal = (geo.size.width + geo.size.height) * 1.4
-            let stripeCount = max(Int(diagonal / stripeWidth) + 2, 2)
-
-            HStack(spacing: 0) {
-                ForEach(0..<stripeCount, id: \.self) { i in
-                    Rectangle().fill(i % 2 == 0 ? dark : darker)
-                        .frame(width: stripeWidth)
-                }
-            }
-            .frame(width: diagonal, height: diagonal)
-            .rotationEffect(.degrees(135))
-            .position(x: geo.size.width / 2, y: geo.size.height / 2)
-            .frame(width: geo.size.width, height: geo.size.height)
-            .clipped()
-            .overlay(
-                Text("POSTER")
-                    .font(.system(size: 9, weight: .regular, design: .monospaced))
-                    .tracking(1)
-                    .foregroundStyle(.white.opacity(0.55))
-                    .multilineTextAlignment(.center)
-                    .padding(6)
-            )
-        }
     }
 }
 
