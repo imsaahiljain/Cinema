@@ -28,7 +28,19 @@ struct TMDBClient {
         return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }
     }
 
+    /// Movie-only unless `SearchConfig.includeTVShows` is on, in which case genres with a TV
+    /// equivalent (see `MediaItem.tvGenreID`) also pull TV results, merged in by popularity.
     func discover(genreID: Int) async throws -> [MediaItem] {
+        async let movies = discoverMovies(genreID: genreID)
+        guard SearchConfig.includeTVShows, let tvGenreID = MediaItem.tvGenreID(forMovieGenreID: genreID) else {
+            return try await movies
+        }
+        async let shows = discoverTV(genreID: tvGenreID)
+        let (movieResults, tvResults) = try await (movies, shows)
+        return (movieResults + tvResults).sorted { ($0.popularity ?? 0) > ($1.popularity ?? 0) }
+    }
+
+    private func discoverMovies(genreID: Int) async throws -> [MediaItem] {
         let url = baseURL
             .appending(path: "discover/movie")
             .appending(queryItems: [
@@ -37,6 +49,17 @@ struct TMDBClient {
             ])
         let results: TMDBSearchResponse = try await fetch(url)
         return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }
+    }
+
+    private func discoverTV(genreID: Int) async throws -> [MediaItem] {
+        let url = baseURL
+            .appending(path: "discover/tv")
+            .appending(queryItems: [
+                .init(name: "with_genres", value: "\(genreID)"),
+                .init(name: "sort_by", value: "popularity.desc")
+            ])
+        let results: TMDBSearchResponse = try await fetch(url)
+        return results.results.compactMap { MediaItem(from: $0, forcedType: .tv) }
     }
 
     func criticallyAcclaimed() async throws -> [MediaItem] {
@@ -77,6 +100,8 @@ struct TMDBClient {
 
     // MARK: - Details & Related
 
+    /// Hits TMDB's combined movie/TV/people endpoint regardless of `SearchConfig.includeTVShows` —
+    /// TV results are filtered back out below so switching the flag doesn't need a different endpoint.
     func search(query: String, page: Int = 1) async throws -> [MediaItem] {
         let url = baseURL
             .appending(path: "search/multi")
@@ -86,7 +111,8 @@ struct TMDBClient {
                 .init(name: "include_adult", value: "false")
             ])
         let results: TMDBSearchResponse = try await fetch(url)
-        return results.results.compactMap { MediaItem(from: $0) }
+        let items = results.results.compactMap { MediaItem(from: $0) }
+        return SearchConfig.includeTVShows ? items : items.filter { $0.mediaType == .movie }
     }
 
     func details(tmdbID: Int, mediaType: MediaType) async throws -> MediaItem {
@@ -165,6 +191,7 @@ struct TMDBResult: Decodable {
     let releaseDate: String?
     let firstAirDate: String?
     let voteAverage: Double?
+    let popularity: Double?
     let genreIds: [Int]?
     let genres: [TMDBGenreItem]?
     let runtime: Int?

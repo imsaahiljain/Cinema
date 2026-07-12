@@ -17,6 +17,7 @@ struct MediaItem: Identifiable, Hashable {
     let genreNames: [String]
     let runtime: Int?
     let originalLanguage: String?
+    let popularity: Double?
 
     init?(from result: TMDBResult) {
         guard let rawType = result.mediaType, let type_ = MediaType(rawValue: rawType),
@@ -34,6 +35,7 @@ struct MediaItem: Identifiable, Hashable {
             ?? (result.genreIds ?? []).compactMap { MediaItem.genreMap[$0] }
         self.runtime = result.runtime ?? result.episodeRunTime?.first
         self.originalLanguage = result.originalLanguage
+        self.popularity = result.popularity
     }
 
     init?(from result: TMDBResult, forcedType: MediaType) {
@@ -51,17 +53,19 @@ struct MediaItem: Identifiable, Hashable {
             ?? (result.genreIds ?? []).compactMap { MediaItem.genreMap[$0] }
         self.runtime = result.runtime ?? result.episodeRunTime?.first
         self.originalLanguage = result.originalLanguage
+        self.popularity = result.popularity
     }
 
     init(id: Int, mediaType: MediaType, title: String, overview: String,
          posterPath: String?, backdropPath: String?, releaseYear: String?,
          voteAverage: Double?, genreNames: [String] = [], runtime: Int? = nil,
-         originalLanguage: String? = nil) {
+         originalLanguage: String? = nil, popularity: Double? = nil) {
         self.id = id; self.mediaType = mediaType; self.title = title
         self.overview = overview; self.posterPath = posterPath
         self.backdropPath = backdropPath; self.releaseYear = releaseYear
         self.voteAverage = voteAverage; self.genreNames = genreNames
         self.runtime = runtime; self.originalLanguage = originalLanguage
+        self.popularity = popularity
     }
 
     var formattedRuntime: String? {
@@ -69,6 +73,22 @@ struct MediaItem: Identifiable, Hashable {
         let h = r / 60, m = r % 60
         if h == 0 { return "\(m)m" }
         return m == 0 ? "\(h)h" : "\(h)h \(m)m"
+    }
+
+    /// TMDB's movie and TV genre lists don't line up 1:1 — some share names but use different IDs,
+    /// and a few movie genres (Horror, Thriller, Romance) have no TV equivalent at all. Returns nil
+    /// when there's nothing sensible to browse on the TV side.
+    static func tvGenreID(forMovieGenreID movieGenreID: Int) -> Int? {
+        switch movieGenreID {
+        case 28: return 10759   // Action -> Action & Adventure
+        case 18: return 18      // Drama
+        case 35: return 35      // Comedy
+        case 878: return 10765  // Sci-Fi -> Sci-Fi & Fantasy
+        case 16: return 16      // Animation
+        case 80: return 80      // Crime
+        case 99: return 99      // Documentary
+        default: return nil     // Thriller, Horror, Romance
+        }
     }
 
     static let genreMap: [Int: String] = [

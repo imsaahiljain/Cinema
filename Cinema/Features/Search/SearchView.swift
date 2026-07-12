@@ -71,7 +71,9 @@ final class SearchViewModel {
 
     func loadTrending() async {
         guard trending.isEmpty else { return }
-        do { trending = try await TMDBClient.shared.trending() } catch {}
+        do {
+            trending = try await TMDBClient.shared.trending(mediaType: SearchConfig.includeTVShows ? "all" : "movie")
+        } catch {}
     }
 
     func loadUserLists(userID: UUID?) async {
@@ -214,7 +216,7 @@ struct SearchView: View {
                 )
                 .animation(.easeInOut(duration: 0.15), value: searchFocused)
 
-            TextField("Films, shows, people...", text: $vm.query)
+            TextField(SearchConfig.includeTVShows ? "Films, shows, people..." : "Films, people...", text: $vm.query)
                 .font(.system(size: 16))
                 .foregroundStyle(CinemaTheme.Colors.textPrimary)
                 .tint(CinemaTheme.Colors.gold)
@@ -257,7 +259,7 @@ struct SearchView: View {
 
     private var segmentControl: some View {
         HStack(spacing: 0) {
-            segmentTab("Films & TV", isSelected: vm.segment == .films) { vm.segment = .films }
+            segmentTab(SearchConfig.includeTVShows ? "Films & TV" : "Films", isSelected: vm.segment == .films) { vm.segment = .films }
             segmentTab("People",     isSelected: vm.segment == .people) { vm.segment = .people }
         }
         .padding(.horizontal, 20)

@@ -11,6 +11,7 @@
 		0882FC922D15144F6CAE4C9C /* RankingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 346682FA060F15CE0C72B7BF /* RankingView.swift */; };
 		0AA3EA0AD48B8314A5F4809B /* ELOService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D937843E51844F3C60087C3C /* ELOService.swift */; };
 		12AF8C29F544B41FA08E1764 /* WarmTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF80799BE693BDEF37186455 /* WarmTheme.swift */; };
+		26357C71D51E0F5A3D9D1CF6 /* SearchConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181FEFAF10B903533B2CBCCC /* SearchConfig.swift */; };
 		3129177F461F125D7D0EEF26 /* NunitoSans-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B42F0F367D8E746801C20F66 /* NunitoSans-Regular.ttf */; };
 		34A8E9FFF570172A75CB7ED0 /* FeedMarqueeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC5825B60F12C184BAD3F41C /* FeedMarqueeView.swift */; };
 		38C68A492E7B13910AA386D4 /* RankingPrototypeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D21685CB405D619BE0A1A89 /* RankingPrototypeView.swift */; };
@@ -59,6 +60,7 @@
 		06B73F937BD0A805881C7560 /* FeedPrototypeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedPrototypeView.swift; sourceTree = "<group>"; };
 		083082767AFFFA05A82D3F8A /* SupabaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseClient.swift; sourceTree = "<group>"; };
 		0DF633982F3A20D7E1103DB9 /* MovieInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovieInfoView.swift; sourceTree = "<group>"; };
+		181FEFAF10B903533B2CBCCC /* SearchConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchConfig.swift; sourceTree = "<group>"; };
 		1981E84705ED6DF978BDCF98 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		19B6FE300EFDFCFD23526BD3 /* CinemaTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaTheme.swift; sourceTree = "<group>"; };
 		19DC63385B01DB8197C52FB5 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
@@ -129,6 +131,7 @@
 		3A4B871A578D605C97A3B098 /* Network */ = {
 			isa = PBXGroup;
 			children = (
+				181FEFAF10B903533B2CBCCC /* SearchConfig.swift */,
 				A3BD8BDAB9CC17FD0B896A6D /* Secrets.swift */,
 				083082767AFFFA05A82D3F8A /* SupabaseClient.swift */,
 				FD02B3CF21F04A2669A89234 /* TMDBClient.swift */,
@@ -462,6 +465,7 @@
 				38C68A492E7B13910AA386D4 /* RankingPrototypeView.swift in Sources */,
 				0882FC922D15144F6CAE4C9C /* RankingView.swift in Sources */,
 				4FD7FC5889D63BB95AF2948A /* RootView.swift in Sources */,
+				26357C71D51E0F5A3D9D1CF6 /* SearchConfig.swift in Sources */,
 				71F4E38D958B04CF4095E790 /* SearchView.swift in Sources */,
 				9508C0F2E6498FBEDF0C149B /* Secrets.swift in Sources */,
 				77EC1A99DEF36338EEB17EBC /* SupabaseClient.swift in Sources */,

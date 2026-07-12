@@ -121,6 +121,17 @@ final class CinemaUITests: XCTestCase {
         pause()
     }
 
+    func testSearchMovieOnly() throws {
+        login()
+        app.buttons["Search"].tap()
+
+        let searchField = app.textFields["Films, people..."]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.tap()
+        searchField.typeText("Minion")
+        pause()
+    }
+
     func testSwipeCommitsPick() throws {
         XCTAssertTrue(app.staticTexts["0"].waitForExistence(timeout: 5))
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
