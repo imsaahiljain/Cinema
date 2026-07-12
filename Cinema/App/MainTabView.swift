@@ -5,7 +5,7 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            FeedView()
+            FeedMarqueeView()
                 .tabItem { Image(systemName: "popcorn.fill") }
                 .tag(0)
 

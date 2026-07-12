@@ -47,6 +47,11 @@ final class CinemaUITests: XCTestCase {
         pause()
     }
 
+    func testFeed() throws {
+        login()
+        pause()
+    }
+
     func testSwipeCommitsPick() throws {
         XCTAssertTrue(app.staticTexts["0"].waitForExistence(timeout: 5))
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))

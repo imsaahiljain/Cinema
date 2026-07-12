@@ -141,6 +141,42 @@ create policy "Users can manage own watchlist"
 create index on public.watchlist (user_id, added_at desc);
 
 -- ─────────────────────────────────────────────
+-- CUSTOM LISTS
+-- User-created lists (e.g. "Funny Movies"), separate from Watched/Watchlist
+-- ─────────────────────────────────────────────
+create table public.custom_lists (
+  id          uuid default uuid_generate_v4() primary key,
+  user_id     uuid references public.users(id) on delete cascade not null,
+  name        text not null,
+  created_at  timestamptz not null default now(),
+  unique (user_id, name)
+);
+
+alter table public.custom_lists enable row level security;
+
+create policy "Users can manage own custom lists"
+  on public.custom_lists for all using (auth.uid() = user_id);
+
+create table public.list_items (
+  id          uuid default uuid_generate_v4() primary key,
+  list_id     uuid references public.custom_lists(id) on delete cascade not null,
+  tmdb_id     integer not null,
+  media_type  text not null check (media_type in ('movie', 'tv')),
+  added_at    timestamptz not null default now(),
+  unique (list_id, tmdb_id, media_type)
+);
+
+alter table public.list_items enable row level security;
+
+create policy "Users can manage items in own lists"
+  on public.list_items for all using (
+    exists (select 1 from public.custom_lists where custom_lists.id = list_items.list_id and custom_lists.user_id = auth.uid())
+  );
+
+create index on public.custom_lists (user_id, created_at desc);
+create index on public.list_items (list_id);
+
+-- ─────────────────────────────────────────────
 -- INDEXES
 -- ─────────────────────────────────────────────
 create index on public.ranked_items (user_id, elo_score desc);
