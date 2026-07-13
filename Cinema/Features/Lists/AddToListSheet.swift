@@ -97,11 +97,15 @@ final class AddToListSheetModel {
 /// lets you pick Watchlist and/or any of your custom lists, matching how many-list apps
 /// (Pinterest boards, etc.) handle "save" instead of assuming there's only one destination.
 struct AddToListSheet: View {
+    let filmTitle: String
+    let posterPath: String?
     @State private var model: AddToListSheetModel
     @Environment(\.dismiss) private var dismiss
     @State private var showCreateList = false
 
-    init(tmdbID: Int, mediaType: MediaType, userID: UUID?) {
+    init(tmdbID: Int, mediaType: MediaType, title: String, posterPath: String?, userID: UUID?) {
+        self.filmTitle = title
+        self.posterPath = posterPath
         _model = State(initialValue: AddToListSheetModel(tmdbID: tmdbID, mediaType: mediaType, userID: userID))
     }
 
@@ -115,6 +119,10 @@ struct AddToListSheet: View {
                 } else {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 0) {
+                            filmHeader
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 16)
+
                             listRow(title: "Watchlist", icon: "bookmark", isOn: model.inWatchlist) {
                                 Task { await model.toggleWatchlist() }
                             }
@@ -170,6 +178,18 @@ struct AddToListSheet: View {
         .presentationDetents([.medium, .large])
     }
 
+    private var filmHeader: some View {
+        HStack(spacing: 12) {
+            PosterImage(path: posterPath, cornerRadius: 6)
+                .frame(width: 40, height: 60)
+            Text(filmTitle)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                .lineLimit(2)
+            Spacer()
+        }
+    }
+
     private func listRow(title: String, icon: String, isOn: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 14) {
@@ -191,5 +211,8 @@ struct AddToListSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // Distinct from the row-level "Watchlist" bookmark button behind this sheet, which
+        // shares the same visible label and would otherwise make XCUITest queries ambiguous.
+        .accessibilityIdentifier("addToListSheet.row.\(title)")
     }
 }

@@ -147,7 +147,7 @@ final class CinemaUITests: XCTestCase {
         pause()
     }
 
-    func testSearchAddToListSheet() throws {
+    func testSearchQuickWatchlistToggle() throws {
         login()
         app.buttons["Search"].tap()
 
@@ -156,11 +156,30 @@ final class CinemaUITests: XCTestCase {
         searchField.tap()
         searchField.typeText("Minion")
 
-        let firstBookmark = app.buttons["Add to List"].firstMatch
+        let firstBookmark = app.buttons["Watchlist"].firstMatch
         XCTAssertTrue(firstBookmark.waitForExistence(timeout: 5))
         firstBookmark.tap()
+        pause()
+    }
 
-        let watchlistRow = app.buttons["Watchlist"]
+    func testSearchLongPressOpensListPicker() throws {
+        login()
+        app.buttons["Search"].tap()
+
+        let searchField = app.textFields["Films, people..."]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.tap()
+        searchField.typeText("Minion")
+
+        let firstBookmark = app.buttons["Watchlist"].firstMatch
+        XCTAssertTrue(firstBookmark.waitForExistence(timeout: 5))
+        firstBookmark.press(forDuration: 0.6)
+
+        let addToListMenuItem = app.buttons["Add to List\u{2026}"]
+        XCTAssertTrue(addToListMenuItem.waitForExistence(timeout: 5))
+        addToListMenuItem.tap()
+
+        let watchlistRow = app.buttons["addToListSheet.row.Watchlist"]
         XCTAssertTrue(watchlistRow.waitForExistence(timeout: 5))
         watchlistRow.tap()
         app.buttons["Done"].tap()

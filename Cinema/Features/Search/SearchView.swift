@@ -120,6 +120,28 @@ final class SearchViewModel {
         } catch {}
     }
 
+    /// Quick single-tap toggle for the common case (just Watchlist) — the full AddToListSheet
+    /// (custom lists too) is reserved for a long-press, so the everyday action stays one tap
+    /// instead of open-sheet → tap-row → tap-Done.
+    func toggleWatchlist(item: MediaItem, userID: UUID?) async {
+        guard let userID else { return }
+        if watchlistIDs.contains(item.id) {
+            do {
+                try await SupabaseClient.shared.from("watchlist")
+                    .delete().eq("user_id", value: userID).eq("tmdb_id", value: item.id).execute()
+                watchlistIDs.remove(item.id)
+            } catch {}
+        } else {
+            do {
+                try await SupabaseClient.shared.from("watchlist")
+                    .upsert(["user_id": userID.uuidString, "tmdb_id": String(item.id),
+                             "media_type": item.mediaType.rawValue])
+                    .execute()
+                watchlistIDs.insert(item.id)
+            } catch {}
+        }
+    }
+
     func toggleFollow(user: CinemaUser, currentUserID: UUID?) async {
         guard let currentUserID else { return }
         if followedIDs.contains(user.id) {
@@ -194,7 +216,7 @@ struct SearchView: View {
         .sheet(item: $addToListItem, onDismiss: {
             Task { await vm.loadUserLists(userID: appState.currentUser?.id) }
         }) { item in
-            AddToListSheet(tmdbID: item.id, mediaType: item.mediaType, userID: appState.currentUser?.id)
+            AddToListSheet(tmdbID: item.id, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, userID: appState.currentUser?.id)
         }
         .sheet(item: $selectedUser) { user in
             NavigationStack {
@@ -403,7 +425,8 @@ struct SearchView: View {
                                     if !alreadyAdded && vm.addedIDs.count >= 2 { showRanking = true }
                                 }
                             },
-                            onWatchlist: { addToListItem = item }
+                            onQuickToggleWatchlist: { Task { await vm.toggleWatchlist(item: item, userID: appState.currentUser?.id) } },
+                            onOpenListPicker: { addToListItem = item }
                         )
                         Divider()
                             .background(CinemaTheme.Colors.border)
@@ -470,7 +493,8 @@ private struct FilmResultRow: View {
     let isWatchlisted: Bool
     let onTap: () -> Void
     let onAdd: () -> Void
-    let onWatchlist: () -> Void
+    let onQuickToggleWatchlist: () -> Void
+    let onOpenListPicker: () -> Void
 
     var body: some View {
         Button(action: onTap) {
@@ -489,23 +513,44 @@ private struct FilmResultRow: View {
                         .font(.system(size: 13))
                         .lineLimit(1)
                         .truncationMode(.tail)
+                        .minimumScaleFactor(0.8)
                 }
 
                 Spacer(minLength: 8)
 
                 HStack(spacing: 14) {
-                    Button(action: onWatchlist) {
+                    // Tap = quick toggle on Watchlist (the common case, one tap in or out).
+                    // Long-press (native context menu) = full AddToListSheet for custom lists too.
+                    Button(action: onQuickToggleWatchlist) {
                         Image(systemName: isWatchlisted ? "bookmark.fill" : "bookmark")
                             .font(.system(size: 17))
                             .foregroundStyle(
                                 isWatchlisted ? CinemaTheme.Colors.gold : CinemaTheme.Colors.textSecondary
                             )
+                            .frame(width: 32, height: 32)
                     }
-                    .accessibilityLabel("Add to List")
+                    .accessibilityLabel("Watchlist")
+                    .accessibilityAddTraits(isWatchlisted ? .isSelected : [])
+                    .contextMenu {
+                        Button {
+                            onOpenListPicker()
+                        } label: {
+                            Label("Add to List\u{2026}", systemImage: "list.bullet")
+                        }
+                    }
+
                     Button(action: onAdd) {
-                        Image(systemName: isAdded ? "checkmark.circle.fill" : "rectangle.split.2x1")
-                            .font(.system(size: isAdded ? 26 : 22))
-                            .foregroundStyle(isAdded ? Color.green : CinemaTheme.Colors.gold)
+                        if isAdded {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 26))
+                                .foregroundStyle(Color.green)
+                        } else {
+                            Text("VS")
+                                .font(.system(size: 11, weight: .heavy))
+                                .foregroundStyle(CinemaTheme.Colors.gold)
+                                .frame(width: 26, height: 26)
+                                .overlay(Circle().strokeBorder(CinemaTheme.Colors.gold, lineWidth: 1.5))
+                        }
                     }
                     .accessibilityLabel(isAdded ? "Ranked" : "Rank This or That")
                 }
