@@ -125,7 +125,7 @@ final class CinemaUITests: XCTestCase {
         login()
         app.buttons["Search"].tap()
 
-        let searchField = app.textFields["Films, people..."]
+        let searchField = app.textFields["Search films..."]
         XCTAssertTrue(searchField.waitForExistence(timeout: 5))
         searchField.tap()
         searchField.typeText("Minion")
@@ -136,7 +136,7 @@ final class CinemaUITests: XCTestCase {
         login()
         app.buttons["Search"].tap()
 
-        let searchField = app.textFields["Films, people..."]
+        let searchField = app.textFields["Search films..."]
         XCTAssertTrue(searchField.waitForExistence(timeout: 5))
         searchField.tap()
         searchField.typeText("Minion")
@@ -151,7 +151,7 @@ final class CinemaUITests: XCTestCase {
         login()
         app.buttons["Search"].tap()
 
-        let searchField = app.textFields["Films, people..."]
+        let searchField = app.textFields["Search films..."]
         XCTAssertTrue(searchField.waitForExistence(timeout: 5))
         searchField.tap()
         searchField.typeText("Minion")
@@ -166,7 +166,7 @@ final class CinemaUITests: XCTestCase {
         login()
         app.buttons["Search"].tap()
 
-        let searchField = app.textFields["Films, people..."]
+        let searchField = app.textFields["Search films..."]
         XCTAssertTrue(searchField.waitForExistence(timeout: 5))
         searchField.tap()
         searchField.typeText("Minion")
@@ -183,6 +183,35 @@ final class CinemaUITests: XCTestCase {
         XCTAssertTrue(watchlistRow.waitForExistence(timeout: 5))
         watchlistRow.tap()
         app.buttons["Done"].tap()
+        pause()
+    }
+
+    func testFindPeopleFromProfile() throws {
+        login()
+        app.buttons["Profile"].tap()
+
+        let findPeople = app.buttons["Find People"]
+        XCTAssertTrue(findPeople.waitForExistence(timeout: 5))
+        findPeople.tap()
+
+        let searchField = app.textFields["Search by username..."]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.typeText("a")
+        pause()
+    }
+
+    func testRetappingRankedItemReopensRanking() throws {
+        login()
+        app.buttons["Search"].tap()
+
+        let searchField = app.textFields["Search films..."]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.tap()
+        searchField.typeText("Minion")
+
+        let ranked = app.buttons["Ranked"].firstMatch
+        XCTAssertTrue(ranked.waitForExistence(timeout: 5))
+        ranked.tap()
         pause()
     }
 

@@ -132,6 +132,7 @@ struct ProfileView: View {
     @State private var showFollowers = false
     @State private var showFollowing = false
     @State private var showSettings = false
+    @State private var showPeopleSearch = false
     @AppStorage("cinema_dev_fingerprint") private var devFingerprintUnlocked = false
 
     var body: some View {
@@ -153,10 +154,17 @@ struct ProfileView: View {
                 .refreshable { await vm.load(userID: appState.currentUser?.id) }
             }
 
-            // Settings gear — floats above scroll
+            // Find People + Settings — float above scroll
             VStack {
                 HStack {
                     Spacer()
+                    Button { showPeopleSearch = true } label: {
+                        Image(systemName: "person.badge.plus")
+                            .font(.system(size: 19, weight: .regular))
+                            .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("Find People")
                     Button { showSettings = true } label: {
                         Image(systemName: "gearshape")
                             .font(.system(size: 20, weight: .regular))
@@ -171,6 +179,9 @@ struct ProfileView: View {
             }
         }
         .task { await vm.load(userID: appState.currentUser?.id) }
+        .sheet(isPresented: $showPeopleSearch) {
+            PeopleSearchView()
+        }
         .sheet(isPresented: $showFollowers) {
             FollowListView(mode: .followers, userID: appState.currentUser?.id)
         }

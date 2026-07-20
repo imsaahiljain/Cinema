@@ -6,17 +6,12 @@ import Supabase
 @Observable
 @MainActor
 final class SearchViewModel {
-    enum Segment { case films, people }
-
     var query = ""
-    var segment: Segment = .films
     var results: [MediaItem] = []
-    var peopleResults: [CinemaUser] = []
     var trending: [MediaItem] = []
     var isSearching = false
     var addedIDs: Set<Int> = []
     var watchlistIDs: Set<Int> = []
-    var followedIDs: Set<UUID> = []
     var selectedGenreID: Int? = nil
     var genreResults: [MediaItem] = []
     var isBrowsingGenre = false
@@ -41,7 +36,7 @@ final class SearchViewModel {
 
     func onQueryChange() {
         searchTask?.cancel()
-        guard !isQueryEmpty else { results = []; peopleResults = []; return }
+        guard !isQueryEmpty else { results = []; return }
         searchTask = Task {
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled else { return }
@@ -53,10 +48,7 @@ final class SearchViewModel {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return }
         isSearching = true
-        async let films = TMDBClient.shared.search(query: q)
-        async let people = searchPeople(q)
-        results = (try? await films) ?? []
-        peopleResults = await people
+        results = (try? await TMDBClient.shared.search(query: q)) ?? []
         isSearching = false
     }
 
@@ -66,13 +58,6 @@ final class SearchViewModel {
         isBrowsingGenre = true
         genreResults = (try? await TMDBClient.shared.discover(genreID: id)) ?? []
         isBrowsingGenre = false
-    }
-
-    private func searchPeople(_ q: String) async -> [CinemaUser] {
-        (try? await SupabaseClient.shared
-            .from("users").select()
-            .ilike("username", pattern: "%\(q.lowercased())%")
-            .limit(20).execute().value) ?? []
     }
 
     func loadTrending() async {
@@ -97,15 +82,6 @@ final class SearchViewModel {
             let wl: [WL] = try await SupabaseClient.shared
                 .from("watchlist").select("tmdb_id").eq("user_id", value: userID).execute().value
             watchlistIDs = Set(wl.map { $0.tmdbID })
-        } catch {}
-        do {
-            struct FE: Decodable {
-                let followingID: UUID
-                enum CodingKeys: String, CodingKey { case followingID = "following_id" }
-            }
-            let edges: [FE] = try await SupabaseClient.shared
-                .from("follows").select("following_id").eq("follower_id", value: userID).execute().value
-            followedIDs = Set(edges.map { $0.followingID })
         } catch {}
     }
 
@@ -142,24 +118,6 @@ final class SearchViewModel {
         }
     }
 
-    func toggleFollow(user: CinemaUser, currentUserID: UUID?) async {
-        guard let currentUserID else { return }
-        if followedIDs.contains(user.id) {
-            do {
-                try await SupabaseClient.shared.from("follows").delete()
-                    .eq("follower_id", value: currentUserID.uuidString)
-                    .eq("following_id", value: user.id.uuidString).execute()
-                followedIDs.remove(user.id)
-            } catch {}
-        } else {
-            do {
-                try await SupabaseClient.shared.from("follows")
-                    .upsert(["follower_id": currentUserID.uuidString, "following_id": user.id.uuidString])
-                    .execute()
-                followedIDs.insert(user.id)
-            } catch {}
-        }
-    }
 }
 
 // MARK: - SearchView
@@ -169,7 +127,6 @@ struct SearchView: View {
     @State private var vm = SearchViewModel()
     @FocusState private var searchFocused: Bool
     @State private var selectedFilm: MediaItem?
-    @State private var selectedUser: CinemaUser?
     @State private var showRanking = false
     @State private var addToListItem: MediaItem?
 
@@ -195,15 +152,11 @@ struct SearchView: View {
                 } else if vm.isQueryEmpty {
                     idleContent
                 } else {
-                    segmentControl
-                    if vm.segment == .films {
-                        genreChips
-                            .padding(.top, 12)
-                            .padding(.bottom, 12)
-                    }
+                    genreChips
+                        .padding(.top, 12)
+                        .padding(.bottom, 12)
                     Divider().background(CinemaTheme.Colors.border)
-                    if vm.segment == .films { filmResults }
-                    else { peopleResults }
+                    filmResults
                 }
             }
         }
@@ -217,17 +170,6 @@ struct SearchView: View {
             Task { await vm.loadUserLists(userID: appState.currentUser?.id) }
         }) { item in
             AddToListSheet(tmdbID: item.id, mediaType: item.mediaType, title: item.title, posterPath: item.posterPath, userID: appState.currentUser?.id)
-        }
-        .sheet(item: $selectedUser) { user in
-            NavigationStack {
-                UserProfileView(user: user)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") { selectedUser = nil }
-                                .foregroundStyle(CinemaTheme.Colors.gold)
-                        }
-                    }
-            }
         }
     }
 
@@ -244,7 +186,7 @@ struct SearchView: View {
                 )
                 .animation(.easeInOut(duration: 0.15), value: searchFocused)
 
-            TextField(SearchConfig.includeTVShows ? "Films, shows, people..." : "Films, people...", text: $vm.query)
+            TextField(SearchConfig.includeTVShows ? "Search films, shows..." : "Search films...", text: $vm.query)
                 .font(.system(size: 16))
                 .foregroundStyle(CinemaTheme.Colors.textPrimary)
                 .tint(CinemaTheme.Colors.gold)
@@ -256,7 +198,6 @@ struct SearchView: View {
                 Button {
                     vm.query = ""
                     vm.results = []
-                    vm.peopleResults = []
                     vm.selectedGenreID = nil
                     vm.genreResults = []
                 } label: {
@@ -281,34 +222,6 @@ struct SearchView: View {
                 )
                 .animation(.easeInOut(duration: 0.2), value: searchFocused)
         )
-    }
-
-    // MARK: - Segment Control
-
-    private var segmentControl: some View {
-        HStack(spacing: 0) {
-            segmentTab(SearchConfig.includeTVShows ? "Films & TV" : "Films", isSelected: vm.segment == .films) { vm.segment = .films }
-            segmentTab("People",     isSelected: vm.segment == .people) { vm.segment = .people }
-        }
-        .padding(.horizontal, 20)
-    }
-
-    private func segmentTab(_ label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 9) {
-                Text(label)
-                    .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(
-                        isSelected ? CinemaTheme.Colors.textPrimary : CinemaTheme.Colors.textSecondary
-                    )
-                    .padding(.top, 4)
-                Rectangle()
-                    .fill(isSelected ? CinemaTheme.Colors.gold : Color.clear)
-                    .frame(height: 2)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .animation(.spring(duration: 0.2), value: isSelected)
     }
 
     // MARK: - Idle Content
@@ -420,9 +333,14 @@ struct SearchView: View {
                             onTap: { selectedFilm = item },
                             onAdd: {
                                 Task {
-                                    let alreadyAdded = vm.addedIDs.contains(item.id)
-                                    await vm.addToRanked(item: item, userID: appState.currentUser?.id)
-                                    if !alreadyAdded && vm.addedIDs.count >= 2 { showRanking = true }
+                                    // Tapping an already-ranked item re-opens the battle screen instead of
+                                    // being a dead end — closing RankingView with the X before ever battling
+                                    // (e.g. only 1 item ranked so far) used to strand it as "added" with no
+                                    // way back in, since isAdded already being true skipped showRanking.
+                                    if !vm.addedIDs.contains(item.id) {
+                                        await vm.addToRanked(item: item, userID: appState.currentUser?.id)
+                                    }
+                                    if vm.addedIDs.count >= 2 { showRanking = true }
                                 }
                             },
                             onQuickToggleWatchlist: { Task { await vm.toggleWatchlist(item: item, userID: appState.currentUser?.id) } },
@@ -431,34 +349,6 @@ struct SearchView: View {
                         Divider()
                             .background(CinemaTheme.Colors.border)
                             .padding(.leading, 90)
-                    }
-                }
-                .padding(.bottom, 100)
-            }
-            .scrollDismissesKeyboard(.immediately)
-        }
-    }
-
-    // MARK: - People Results
-
-    @ViewBuilder
-    private var peopleResults: some View {
-        if vm.peopleResults.isEmpty {
-            emptyState(icon: "person", message: "No one found for \"\(vm.query)\"")
-        } else {
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 0) {
-                    ForEach(vm.peopleResults) { user in
-                        PeopleResultRow(
-                            user: user,
-                            isFollowing: vm.followedIDs.contains(user.id),
-                            isCurrentUser: user.id == appState.currentUser?.id,
-                            onTap: { selectedUser = user },
-                            onFollow: { Task { await vm.toggleFollow(user: user, currentUserID: appState.currentUser?.id) } }
-                        )
-                        Divider()
-                            .background(CinemaTheme.Colors.border)
-                            .padding(.leading, 78)
                     }
                 }
                 .padding(.bottom, 100)
@@ -584,62 +474,3 @@ private struct FilmResultRow: View {
     }
 }
 
-// MARK: - People Result Row
-
-private struct PeopleResultRow: View {
-    let user: CinemaUser
-    let isFollowing: Bool
-    let isCurrentUser: Bool
-    let onTap: () -> Void
-    let onFollow: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(CinemaTheme.Colors.surface)
-                        .frame(width: 46, height: 46)
-                        .overlay(Circle().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
-                    Text((user.displayName ?? user.username).prefix(1).uppercased())
-                        .font(.system(size: 19, weight: .bold))
-                        .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(user.displayName ?? user.username)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                    Text("@\(user.username)")
-                        .font(.system(size: 13))
-                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                }
-
-                Spacer()
-
-                if !isCurrentUser {
-                    Button(action: onFollow) {
-                        Text(isFollowing ? "Following" : "Follow")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(isFollowing ? CinemaTheme.Colors.textSecondary : .black)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(isFollowing ? CinemaTheme.Colors.surface : CinemaTheme.Colors.gold)
-                            .clipShape(Capsule())
-                            .overlay(
-                                Capsule().strokeBorder(
-                                    isFollowing ? CinemaTheme.Colors.border : Color.clear,
-                                    lineWidth: 1
-                                )
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 13)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-}
