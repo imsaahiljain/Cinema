@@ -384,8 +384,13 @@ private struct SearchGridTile: View {
                     // a nested Button (the "..." dots) sits in the same label, and composing
                     // simultaneousGesture on the outer Button wasn't triggering reliably with
                     // that nested button present.
+                    // .fill, not .fit — PosterImage already fills whatever frame it's given
+                    // internally; .fit on top of that let the box shrink and center within the
+                    // column instead of filling it edge to edge, which is why the poster (and
+                    // the checkmark badge anchored to its bounds) looked inset from the title.
                     PosterImage(path: item.posterPath, cornerRadius: 10)
-                        .aspectRatio(2 / 3, contentMode: .fit)
+                        .aspectRatio(2 / 3, contentMode: .fill)
+                        .clipped()
                         .simultaneousGesture(
                             LongPressGesture(minimumDuration: 0.4).onEnded { _ in showActions = true }
                         )
