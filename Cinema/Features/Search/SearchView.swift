@@ -178,6 +178,7 @@ struct SearchView: View {
                     vm.results = []
                     vm.selectedGenreID = nil
                     vm.genreResults = []
+                    searchFocused = false
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 15))

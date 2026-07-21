@@ -132,6 +132,26 @@ final class CinemaUITests: XCTestCase {
         pause()
     }
 
+    func testClearButtonDismissesKeyboard() throws {
+        login()
+        app.buttons["Search"].tap()
+
+        let searchField = app.textFields["Search films..."]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.tap()
+        searchField.typeText("Minion")
+
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+
+        let clearButton = app.buttons["xmark.circle.fill"]
+        XCTAssertTrue(clearButton.waitForExistence(timeout: 5))
+        clearButton.tap()
+
+        let keyboardGone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
+        wait(for: [keyboardGone], timeout: 5)
+        pause()
+    }
+
     func testSearchGenreChipFiltersTypedResults() throws {
         login()
         app.buttons["Search"].tap()
