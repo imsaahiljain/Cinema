@@ -176,9 +176,13 @@ final class CinemaUITests: XCTestCase {
         searchField.tap()
         searchField.typeText("Minion")
 
-        let firstBookmark = app.buttons["Add to List"].firstMatch
-        XCTAssertTrue(firstBookmark.waitForExistence(timeout: 5))
-        firstBookmark.tap()
+        let firstQuickActions = app.buttons["Quick Actions"].firstMatch
+        XCTAssertTrue(firstQuickActions.waitForExistence(timeout: 5))
+        firstQuickActions.tap()
+
+        let addToListMenuItem = app.buttons["Add to List"]
+        XCTAssertTrue(addToListMenuItem.waitForExistence(timeout: 5))
+        addToListMenuItem.tap()
 
         let watchlistRow = app.buttons["addToListSheet.row.Watchlist"]
         XCTAssertTrue(watchlistRow.waitForExistence(timeout: 5))
@@ -213,9 +217,13 @@ final class CinemaUITests: XCTestCase {
         searchField.tap()
         searchField.typeText("Minion")
 
-        let ranked = app.buttons["Ranked"].firstMatch
-        XCTAssertTrue(ranked.waitForExistence(timeout: 5))
-        ranked.tap()
+        let firstQuickActions = app.buttons["Quick Actions"].firstMatch
+        XCTAssertTrue(firstQuickActions.waitForExistence(timeout: 5))
+        firstQuickActions.tap()
+
+        let reRank = app.buttons["Re-Rank"]
+        XCTAssertTrue(reRank.waitForExistence(timeout: 5))
+        reRank.tap()
         pause()
     }
 

@@ -303,9 +303,16 @@ struct SearchView: View {
             emptyState(icon: "film", message: message)
         } else {
             ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 0) {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 12),
+                        GridItem(.flexible(), spacing: 12),
+                        GridItem(.flexible()),
+                    ],
+                    spacing: 22
+                ) {
                     ForEach(vm.displayedResults) { item in
-                        FilmResultRow(
+                        SearchGridTile(
                             item: item,
                             isAdded: vm.addedIDs.contains(item.id),
                             isWatchlisted: vm.watchlistIDs.contains(item.id),
@@ -324,11 +331,10 @@ struct SearchView: View {
                             },
                             onOpenListPicker: { addToListItem = item }
                         )
-                        Divider()
-                            .background(CinemaTheme.Colors.border)
-                            .padding(.leading, 90)
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
                 .padding(.bottom, 100)
             }
             .scrollDismissesKeyboard(.immediately)
@@ -355,7 +361,12 @@ struct SearchView: View {
 
 // MARK: - Film Result Row
 
-private struct FilmResultRow: View {
+/// Poster-forward grid tile (replaces the old full-width list row): searching is a
+/// confirm-and-select task, not a browse task — you already know the title, so recognizing
+/// the poster matters more than reading a paragraph of metadata. Actions live behind a single
+/// visible affordance (the "..." dots) with a long-press-the-title shortcut on top of it —
+/// nothing in this app should require a hidden gesture with no discoverable equivalent.
+private struct SearchGridTile: View {
     let item: MediaItem
     let isAdded: Bool
     let isWatchlisted: Bool
@@ -363,74 +374,67 @@ private struct FilmResultRow: View {
     let onAdd: () -> Void
     let onOpenListPicker: () -> Void
 
+    @State private var showActions = false
+
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 14) {
-                PosterImage(path: item.posterPath, cornerRadius: 8)
-                    .frame(width: 56, height: 84)
+        VStack(alignment: .leading, spacing: 6) {
+            Button(action: onTap) {
+                ZStack(alignment: .top) {
+                    PosterImage(path: item.posterPath, cornerRadius: 10)
+                        .aspectRatio(2 / 3, contentMode: .fit)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(item.title)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-
-                    metadataLine
-                        .font(.system(size: 13))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .minimumScaleFactor(0.8)
-                }
-
-                Spacer(minLength: 8)
-
-                HStack(spacing: 14) {
-                    Button(action: onOpenListPicker) {
-                        Image(systemName: isWatchlisted ? "bookmark.fill" : "bookmark")
-                            .font(.system(size: 17))
-                            .foregroundStyle(
-                                isWatchlisted ? CinemaTheme.Colors.gold : CinemaTheme.Colors.textSecondary
-                            )
-                            .frame(width: 32, height: 32)
+                    HStack {
+                        if isWatchlisted { statusBadge(icon: "bookmark.fill", tint: CinemaTheme.Colors.gold) }
+                        Spacer()
+                        if isAdded { statusBadge(icon: "checkmark", tint: .green) }
                     }
-                    .accessibilityLabel("Add to List")
-                    .accessibilityAddTraits(isWatchlisted ? .isSelected : [])
-
-                    Button(action: onAdd) {
-                        if isAdded {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 26))
-                                .foregroundStyle(Color.green)
-                        } else {
-                            Text("VS")
-                                .font(.system(size: 11, weight: .heavy))
-                                .foregroundStyle(CinemaTheme.Colors.gold)
-                                .frame(width: 26, height: 26)
-                                .overlay(Circle().strokeBorder(CinemaTheme.Colors.gold, lineWidth: 1.5))
-                        }
-                    }
-                    .accessibilityLabel(isAdded ? "Ranked" : "Rank This or That")
+                    .padding(6)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+
+            HStack(alignment: .top, spacing: 4) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.title)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                        .lineLimit(1)
+                        .onLongPressGesture(minimumDuration: 0.4) { showActions = true }
+
+                    captionLine
+                        .font(.system(size: 11))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 2)
+
+                Button { showActions = true } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                        .frame(width: 20, height: 20)
+                }
+                .accessibilityLabel("Quick Actions")
+            }
         }
-        .buttonStyle(.plain)
+        .popover(isPresented: $showActions) {
+            actionsMenu
+                .presentationCompactAdaptation(.popover)
+        }
     }
 
-    /// Single truncating Text (not a row of separate Text/Image views) so a squeezed row
-    /// ellipsizes cleanly instead of wrapping mid-word — an HStack of independent Text
-    /// elements has no shared truncation and can break a word like "Animation" across lines.
-    private var metadataLine: Text {
+    private func statusBadge(icon: String, tint: Color) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(.black)
+            .frame(width: 18, height: 18)
+            .background(tint, in: Circle())
+    }
+
+    private var captionLine: Text {
         var segments: [Text] = []
         if let year = item.releaseYear {
             segments.append(Text(year).foregroundStyle(CinemaTheme.Colors.textSecondary))
-        }
-        segments.append(Text(item.mediaType == .movie ? "Film" : "TV").foregroundStyle(CinemaTheme.Colors.textSecondary))
-        if let genre = item.genreNames.first {
-            segments.append(Text(genre).foregroundStyle(CinemaTheme.Colors.textSecondary))
         }
         if let rating = item.voteAverage, rating > 0 {
             let star = Text(Image(systemName: "star.fill")).foregroundStyle(CinemaTheme.Colors.gold)
@@ -439,6 +443,40 @@ private struct FilmResultRow: View {
         }
         let dot = Text(" · ").foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.4))
         return segments.dropFirst().reduce(segments.first ?? Text("")) { $0 + dot + $1 }
+    }
+
+    private var actionsMenu: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                showActions = false
+                onOpenListPicker()
+            } label: {
+                Label("Add to List", systemImage: "bookmark")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+
+            Divider().background(CinemaTheme.Colors.border)
+
+            Button {
+                showActions = false
+                onAdd()
+            } label: {
+                Label(isAdded ? "Re-Rank" : "Rank This or That", systemImage: "circle.grid.cross")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(width: 230)
+        .background(CinemaTheme.Colors.surface)
     }
 }
 
