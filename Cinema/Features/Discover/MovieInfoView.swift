@@ -183,6 +183,15 @@ struct MovieInfoView: View {
                         }
                     }
                 }
+
+                // Rating is TMDB's own community score, not IMDb/RT — surfacing the vote count
+                // here is what actually answers "is this rating trustworthy," right where someone
+                // is deciding whether to believe it, rather than just asserting a bare number.
+                if let score = film.voteAverage, score > 0, let count = film.voteCount {
+                    Text("TMDB rating from \(count) \(count == 1 ? "rating" : "ratings")")
+                        .font(.system(size: 11))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.6))
+                }
             }
 
             // Trailer + action buttons

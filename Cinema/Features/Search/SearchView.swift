@@ -305,11 +305,11 @@ struct SearchView: View {
             ScrollView(showsIndicators: false) {
                 LazyVGrid(
                     columns: [
-                        GridItem(.flexible(), spacing: 12),
-                        GridItem(.flexible(), spacing: 12),
+                        GridItem(.flexible(), spacing: 8),
+                        GridItem(.flexible(), spacing: 8),
                         GridItem(.flexible()),
                     ],
-                    spacing: 22
+                    spacing: 18
                 ) {
                     ForEach(vm.displayedResults) { item in
                         SearchGridTile(
@@ -333,7 +333,7 @@ struct SearchView: View {
                         )
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 12)
                 .padding(.top, 16)
                 .padding(.bottom, 100)
             }
@@ -392,18 +392,24 @@ private struct SearchGridTile: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("searchGridTile.poster.\(item.id)")
 
             HStack(alignment: .top, spacing: 4) {
                 VStack(alignment: .leading, spacing: 1) {
+                    // Two lines, not one — a truncated "Minions and…" is worse than an extra
+                    // line of caption height; the rating moved to the detail screen (with vote
+                    // count context) so this tile only needs to carry title + year.
                     Text(item.title)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                        .lineLimit(1)
+                        .lineLimit(2)
                         .onLongPressGesture(minimumDuration: 0.4) { showActions = true }
 
-                    captionLine
-                        .font(.system(size: 11))
-                        .lineLimit(1)
+                    if let year = item.releaseYear {
+                        Text(year)
+                            .font(.system(size: 11))
+                            .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                    }
                 }
 
                 Spacer(minLength: 2)
@@ -429,20 +435,6 @@ private struct SearchGridTile: View {
             .foregroundStyle(.black)
             .frame(width: 18, height: 18)
             .background(tint, in: Circle())
-    }
-
-    private var captionLine: Text {
-        var segments: [Text] = []
-        if let year = item.releaseYear {
-            segments.append(Text(year).foregroundStyle(CinemaTheme.Colors.textSecondary))
-        }
-        if let rating = item.voteAverage, rating > 0 {
-            let star = Text(Image(systemName: "star.fill")).foregroundStyle(CinemaTheme.Colors.gold)
-            let value = Text(" " + String(format: "%.1f", rating)).foregroundStyle(CinemaTheme.Colors.textSecondary)
-            segments.append(star + value)
-        }
-        let dot = Text(" · ").foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.4))
-        return segments.dropFirst().reduce(segments.first ?? Text("")) { $0 + dot + $1 }
     }
 
     private var actionsMenu: some View {

@@ -14,6 +14,7 @@ struct MediaItem: Identifiable, Hashable {
     let backdropPath: String?
     let releaseYear: String?
     let voteAverage: Double?
+    let voteCount: Int?
     let genreNames: [String]
     let runtime: Int?
     let originalLanguage: String?
@@ -29,6 +30,7 @@ struct MediaItem: Identifiable, Hashable {
         self.posterPath = result.posterPath
         self.backdropPath = result.backdropPath
         self.voteAverage = result.voteAverage
+        self.voteCount = result.voteCount
         let dateStr = result.releaseDate ?? result.firstAirDate ?? ""
         self.releaseYear = String(dateStr.prefix(4)).isEmpty ? nil : String(dateStr.prefix(4))
         self.genreNames = result.genres.map { g in g.map { $0.name } }
@@ -47,6 +49,7 @@ struct MediaItem: Identifiable, Hashable {
         self.posterPath = result.posterPath
         self.backdropPath = result.backdropPath
         self.voteAverage = result.voteAverage
+        self.voteCount = result.voteCount
         let dateStr = result.releaseDate ?? result.firstAirDate ?? ""
         self.releaseYear = String(dateStr.prefix(4)).isEmpty ? nil : String(dateStr.prefix(4))
         self.genreNames = result.genres.map { g in g.map { $0.name } }
@@ -58,12 +61,12 @@ struct MediaItem: Identifiable, Hashable {
 
     init(id: Int, mediaType: MediaType, title: String, overview: String,
          posterPath: String?, backdropPath: String?, releaseYear: String?,
-         voteAverage: Double?, genreNames: [String] = [], runtime: Int? = nil,
+         voteAverage: Double?, voteCount: Int? = nil, genreNames: [String] = [], runtime: Int? = nil,
          originalLanguage: String? = nil, popularity: Double? = nil) {
         self.id = id; self.mediaType = mediaType; self.title = title
         self.overview = overview; self.posterPath = posterPath
         self.backdropPath = backdropPath; self.releaseYear = releaseYear
-        self.voteAverage = voteAverage; self.genreNames = genreNames
+        self.voteAverage = voteAverage; self.voteCount = voteCount; self.genreNames = genreNames
         self.runtime = runtime; self.originalLanguage = originalLanguage
         self.popularity = popularity
     }

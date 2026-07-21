@@ -128,7 +128,7 @@ final class CinemaUITests: XCTestCase {
         let searchField = app.textFields["Search films..."]
         XCTAssertTrue(searchField.waitForExistence(timeout: 5))
         searchField.tap()
-        searchField.typeText("Minion")
+        searchField.typeText("Minions")
         pause()
     }
 
@@ -224,6 +224,21 @@ final class CinemaUITests: XCTestCase {
         let reRank = app.buttons["Re-Rank"]
         XCTAssertTrue(reRank.waitForExistence(timeout: 5))
         reRank.tap()
+        pause()
+    }
+
+    func testMovieDetailShowsVoteCount() throws {
+        login()
+        app.buttons["Search"].tap()
+
+        let searchField = app.textFields["Search films..."]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.tap()
+        searchField.typeText("Minions")
+
+        let firstPoster = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'searchGridTile.poster.'")).firstMatch
+        XCTAssertTrue(firstPoster.waitForExistence(timeout: 5))
+        firstPoster.tap()
         pause()
     }
 

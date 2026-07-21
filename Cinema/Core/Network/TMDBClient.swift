@@ -191,6 +191,7 @@ struct TMDBResult: Decodable {
     let releaseDate: String?
     let firstAirDate: String?
     let voteAverage: Double?
+    let voteCount: Int?
     let popularity: Double?
     let genreIds: [Int]?
     let genres: [TMDBGenreItem]?
