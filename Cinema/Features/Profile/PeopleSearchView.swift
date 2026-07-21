@@ -170,6 +170,7 @@ struct PeopleSearchView: View {
                 .font(.system(size: 16))
                 .foregroundStyle(CinemaTheme.Colors.textPrimary)
                 .tint(CinemaTheme.Colors.gold)
+                .autocorrectionDisabled()
                 .focused($searchFocused)
                 .onChange(of: vm.query) { _, _ in vm.onQueryChange() }
                 .submitLabel(.search)

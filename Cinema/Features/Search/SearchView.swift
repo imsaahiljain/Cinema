@@ -168,6 +168,7 @@ struct SearchView: View {
                 .font(.system(size: 16))
                 .foregroundStyle(CinemaTheme.Colors.textPrimary)
                 .tint(CinemaTheme.Colors.gold)
+                .autocorrectionDisabled()
                 .focused($searchFocused)
                 .onChange(of: vm.query) { _, _ in vm.onQueryChange() }
                 .submitLabel(.search)
@@ -435,13 +436,19 @@ private struct SearchGridTile: View {
                     .lineLimit(2)
 
                 // Year dropped entirely — outside a handful of brand-new releases, it did
-                // nothing to help identify a movie. "New" is the one piece of date info
-                // actually worth surfacing here, so it's the only thing left in this slot.
+                // nothing to help identify a movie. "New" / "Coming Soon" are the only date
+                // info actually worth surfacing here, so they're the only things left in
+                // this slot — nothing shown for anything already out and not brand new.
                 if item.isRecentRelease {
                     Text("NEW")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(CinemaTheme.Colors.gold)
                         .kerning(0.5)
+                } else if item.isUpcoming {
+                    Text("COMING SOON")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                        .kerning(0.3)
                 }
             }
         }

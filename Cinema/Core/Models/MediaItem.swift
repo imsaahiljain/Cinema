@@ -90,6 +90,15 @@ struct MediaItem: Identifiable, Hashable {
         return days >= 0 && days <= 45
     }
 
+    /// TMDB indexes movies from the moment they're announced (its `status` field goes
+    /// Rumored -> Planned -> In Production -> Post Production -> Released), years before they
+    /// exist — that field isn't in the lightweight search response though, only release_date is,
+    /// which is enough on its own: anything dated in the future hasn't released yet, full stop.
+    var isUpcoming: Bool {
+        guard let releaseDate else { return false }
+        return releaseDate > Date()
+    }
+
     var formattedRuntime: String? {
         guard let r = runtime, r > 0 else { return nil }
         let h = r / 60, m = r % 60

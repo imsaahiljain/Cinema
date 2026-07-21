@@ -152,6 +152,32 @@ final class CinemaUITests: XCTestCase {
         pause()
     }
 
+    func testSearchShowsComingSoonTag() throws {
+        login()
+        app.buttons["Search"].tap()
+
+        let searchField = app.textFields["Search films..."]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.tap()
+        searchField.typeText("Dune")
+        app.swipeUp()
+        pause()
+    }
+
+    func testAutocorrectDisabledInSearch() throws {
+        login()
+        app.buttons["Search"].tap()
+
+        let searchField = app.textFields["Search films..."]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.tap()
+        // Trailing space is the moment autocorrect would normally swap the preceding word —
+        // typing "Dine" alone never proves anything since substitution only fires at a word
+        // boundary.
+        searchField.typeText("Dine ")
+        pause()
+    }
+
     func testSearchGenreChipFiltersTypedResults() throws {
         login()
         app.buttons["Search"].tap()
