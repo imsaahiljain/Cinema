@@ -434,18 +434,14 @@ private struct SearchGridTile: View {
                     .foregroundStyle(CinemaTheme.Colors.textPrimary)
                     .lineLimit(2)
 
-                // "New" takes the year's slot rather than sitting alongside it — a recent
-                // release is more useful to flag than its year, and the tile has no room for
-                // both. Plain text, no filled pill, matching the app's quiet-chrome rule.
+                // Year dropped entirely — outside a handful of brand-new releases, it did
+                // nothing to help identify a movie. "New" is the one piece of date info
+                // actually worth surfacing here, so it's the only thing left in this slot.
                 if item.isRecentRelease {
                     Text("NEW")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(CinemaTheme.Colors.gold)
                         .kerning(0.5)
-                } else if let year = item.releaseYear {
-                    Text(year)
-                        .font(.system(size: 11))
-                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
                 }
             }
         }
