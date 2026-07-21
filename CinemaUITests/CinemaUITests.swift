@@ -147,7 +147,7 @@ final class CinemaUITests: XCTestCase {
         pause()
     }
 
-    func testSearchQuickWatchlistToggle() throws {
+    func testSearchTapOpensListPickerAndAutoDismisses() throws {
         login()
         app.buttons["Search"].tap()
 
@@ -156,33 +156,17 @@ final class CinemaUITests: XCTestCase {
         searchField.tap()
         searchField.typeText("Minion")
 
-        let firstBookmark = app.buttons["Watchlist"].firstMatch
+        let firstBookmark = app.buttons["Add to List"].firstMatch
         XCTAssertTrue(firstBookmark.waitForExistence(timeout: 5))
         firstBookmark.tap()
-        pause()
-    }
-
-    func testSearchLongPressOpensListPicker() throws {
-        login()
-        app.buttons["Search"].tap()
-
-        let searchField = app.textFields["Search films..."]
-        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
-        searchField.tap()
-        searchField.typeText("Minion")
-
-        let firstBookmark = app.buttons["Watchlist"].firstMatch
-        XCTAssertTrue(firstBookmark.waitForExistence(timeout: 5))
-        firstBookmark.press(forDuration: 0.6)
-
-        let addToListMenuItem = app.buttons["Add to List\u{2026}"]
-        XCTAssertTrue(addToListMenuItem.waitForExistence(timeout: 5))
-        addToListMenuItem.tap()
 
         let watchlistRow = app.buttons["addToListSheet.row.Watchlist"]
         XCTAssertTrue(watchlistRow.waitForExistence(timeout: 5))
         watchlistRow.tap()
-        app.buttons["Done"].tap()
+
+        // No Done button anymore — tapping a row should toggle it and close the sheet on its own.
+        let goneExpectation = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: watchlistRow)
+        wait(for: [goneExpectation], timeout: 5)
         pause()
     }
 

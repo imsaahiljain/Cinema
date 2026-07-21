@@ -94,8 +94,9 @@ final class AddToListSheetModel {
 // MARK: - AddToListSheet
 
 /// Bookmark tap in Search opens this instead of silently adding straight to Watchlist —
-/// lets you pick Watchlist and/or any of your custom lists, matching how many-list apps
-/// (Pinterest boards, etc.) handle "save" instead of assuming there's only one destination.
+/// lets you pick Watchlist or any of your custom lists. Deliberately single-action: tapping
+/// a row toggles that one list and closes the sheet immediately, no separate "Done" step —
+/// to add to more than one list, reopen it and tap again.
 struct AddToListSheet: View {
     let filmTitle: String
     let posterPath: String?
@@ -110,60 +111,61 @@ struct AddToListSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                CinemaTheme.Colors.background.ignoresSafeArea()
+        ZStack {
+            CinemaTheme.Colors.background.ignoresSafeArea()
 
-                if model.isLoading {
-                    ProgressView().tint(CinemaTheme.Colors.gold)
-                } else {
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 0) {
-                            filmHeader
-                                .padding(.horizontal, 20)
-                                .padding(.bottom, 16)
+            if model.isLoading {
+                ProgressView().tint(CinemaTheme.Colors.gold)
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        Text("Add to List")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                            .padding(.top, 18)
+                            .padding(.bottom, 14)
 
-                            listRow(title: "Watchlist", icon: "bookmark", isOn: model.inWatchlist) {
-                                Task { await model.toggleWatchlist() }
+                        filmHeader
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 16)
+
+                        listRow(title: "Watchlist", icon: "bookmark", isOn: model.inWatchlist) {
+                            Task {
+                                await model.toggleWatchlist()
+                                dismiss()
+                            }
+                        }
+                        Divider().background(CinemaTheme.Colors.border).padding(.leading, 52)
+
+                        ForEach(model.customLists) { list in
+                            listRow(title: list.name, icon: "list.bullet", isOn: model.inListIDs.contains(list.id)) {
+                                Task {
+                                    await model.toggle(list: list)
+                                    dismiss()
+                                }
                             }
                             Divider().background(CinemaTheme.Colors.border).padding(.leading, 52)
-
-                            ForEach(model.customLists) { list in
-                                listRow(title: list.name, icon: "list.bullet", isOn: model.inListIDs.contains(list.id)) {
-                                    Task { await model.toggle(list: list) }
-                                }
-                                Divider().background(CinemaTheme.Colors.border).padding(.leading, 52)
-                            }
-
-                            Button {
-                                showCreateList = true
-                            } label: {
-                                HStack(spacing: 14) {
-                                    Image(systemName: "plus.circle.fill")
-                                        .font(.system(size: 20))
-                                        .foregroundStyle(CinemaTheme.Colors.gold)
-                                        .frame(width: 24)
-                                    Text("New List")
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 14)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
                         }
-                        .padding(.top, 8)
+
+                        Button {
+                            showCreateList = true
+                        } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(CinemaTheme.Colors.gold)
+                                    .frame(width: 24)
+                                Text("New List")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 14)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                }
-            }
-            .navigationTitle("Add to List")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(CinemaTheme.Colors.gold)
                 }
             }
         }
@@ -173,6 +175,7 @@ struct AddToListSheet: View {
                 if let list = await model.createList(name: name) {
                     await model.toggle(list: list)
                 }
+                dismiss()
             }
         }
         .presentationDetents([.medium, .large])

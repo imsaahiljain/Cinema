@@ -96,28 +96,6 @@ final class SearchViewModel {
         } catch {}
     }
 
-    /// Quick single-tap toggle for the common case (just Watchlist) — the full AddToListSheet
-    /// (custom lists too) is reserved for a long-press, so the everyday action stays one tap
-    /// instead of open-sheet → tap-row → tap-Done.
-    func toggleWatchlist(item: MediaItem, userID: UUID?) async {
-        guard let userID else { return }
-        if watchlistIDs.contains(item.id) {
-            do {
-                try await SupabaseClient.shared.from("watchlist")
-                    .delete().eq("user_id", value: userID).eq("tmdb_id", value: item.id).execute()
-                watchlistIDs.remove(item.id)
-            } catch {}
-        } else {
-            do {
-                try await SupabaseClient.shared.from("watchlist")
-                    .upsert(["user_id": userID.uuidString, "tmdb_id": String(item.id),
-                             "media_type": item.mediaType.rawValue])
-                    .execute()
-                watchlistIDs.insert(item.id)
-            } catch {}
-        }
-    }
-
 }
 
 // MARK: - SearchView
@@ -343,7 +321,6 @@ struct SearchView: View {
                                     if vm.addedIDs.count >= 2 { showRanking = true }
                                 }
                             },
-                            onQuickToggleWatchlist: { Task { await vm.toggleWatchlist(item: item, userID: appState.currentUser?.id) } },
                             onOpenListPicker: { addToListItem = item }
                         )
                         Divider()
@@ -383,7 +360,6 @@ private struct FilmResultRow: View {
     let isWatchlisted: Bool
     let onTap: () -> Void
     let onAdd: () -> Void
-    let onQuickToggleWatchlist: () -> Void
     let onOpenListPicker: () -> Void
 
     var body: some View {
@@ -409,9 +385,7 @@ private struct FilmResultRow: View {
                 Spacer(minLength: 8)
 
                 HStack(spacing: 14) {
-                    // Tap = quick toggle on Watchlist (the common case, one tap in or out).
-                    // Long-press (native context menu) = full AddToListSheet for custom lists too.
-                    Button(action: onQuickToggleWatchlist) {
+                    Button(action: onOpenListPicker) {
                         Image(systemName: isWatchlisted ? "bookmark.fill" : "bookmark")
                             .font(.system(size: 17))
                             .foregroundStyle(
@@ -419,15 +393,8 @@ private struct FilmResultRow: View {
                             )
                             .frame(width: 32, height: 32)
                     }
-                    .accessibilityLabel("Watchlist")
+                    .accessibilityLabel("Add to List")
                     .accessibilityAddTraits(isWatchlisted ? .isSelected : [])
-                    .contextMenu {
-                        Button {
-                            onOpenListPicker()
-                        } label: {
-                            Label("Add to List\u{2026}", systemImage: "list.bullet")
-                        }
-                    }
 
                     Button(action: onAdd) {
                         if isAdded {
