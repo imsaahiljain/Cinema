@@ -242,6 +242,24 @@ final class CinemaUITests: XCTestCase {
         pause()
     }
 
+    func testLongPressPosterOpensQuickActions() throws {
+        login()
+        app.buttons["Search"].tap()
+
+        let searchField = app.textFields["Search films..."]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.tap()
+        searchField.typeText("Minions")
+
+        let firstPoster = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'searchGridTile.poster.'")).firstMatch
+        XCTAssertTrue(firstPoster.waitForExistence(timeout: 5))
+        firstPoster.press(forDuration: 0.6)
+
+        let addToListMenuItem = app.buttons["Add to List"]
+        XCTAssertTrue(addToListMenuItem.waitForExistence(timeout: 5))
+        pause()
+    }
+
     func testSwipeCommitsPick() throws {
         XCTAssertTrue(app.staticTexts["0"].waitForExistence(timeout: 5))
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))

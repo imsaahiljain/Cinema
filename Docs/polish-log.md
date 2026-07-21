@@ -6,6 +6,9 @@ Whenever a change like this gets decided or built, add an entry here (newest on 
 
 ---
 
+**2026-07-20 — Search rebuilt as a poster grid: recognition over reading**
+Typed search results used to be a text-heavy list (poster, title, year, genre, rating all spelled out in a row) — the same shape as a lot of search UIs, but wrong for this app specifically. The insight: someone using Search has almost always already decided what they're looking for — they just watched it and want to log it, or a friend recommended it and they're adding it. That's a *confirm-and-select* task, not a *browse and discover* task (Discover already owns browsing). For confirming a title you already have in mind, recognizing the poster art is faster than reading a row of metadata, so Search now renders results as the same 3-column poster grid as the idle Trending browse — tap a poster to confirm on the detail screen, everything else (Add to List, Rank This or That) tucked behind a quiet "..." on the poster with a long-press shortcut on top of it. Good before/after material — the old row-based screen vs. this grid is a clean visual demonstration of "we didn't just copy a generic search UI, we designed for how people actually use this specific feature."
+
 **2026-07-11 — Rankings screen: quiet "Lists" caption up top**
 After dropping the big "Rankings" title/subtitle, the tab switcher sat flush against the safe area, which read as cramped rather than clean. Added a small, quiet "Lists" label above it — just enough breathing room, not a return to the big serif headline. Closer to how Beli gives "MY LISTS" a plain caption rather than no header at all.
 

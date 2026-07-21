@@ -380,47 +380,59 @@ private struct SearchGridTile: View {
         VStack(alignment: .leading, spacing: 6) {
             Button(action: onTap) {
                 ZStack(alignment: .top) {
+                    // Gesture lives on the poster image specifically (not the whole button) —
+                    // a nested Button (the "..." dots) sits in the same label, and composing
+                    // simultaneousGesture on the outer Button wasn't triggering reliably with
+                    // that nested button present.
                     PosterImage(path: item.posterPath, cornerRadius: 10)
                         .aspectRatio(2 / 3, contentMode: .fit)
+                        .simultaneousGesture(
+                            LongPressGesture(minimumDuration: 0.4).onEnded { _ in showActions = true }
+                        )
 
-                    HStack {
-                        if isWatchlisted { statusBadge(icon: "bookmark.fill", tint: CinemaTheme.Colors.gold) }
+                    VStack {
+                        HStack {
+                            if isWatchlisted { statusBadge(icon: "bookmark.fill", tint: CinemaTheme.Colors.gold) }
+                            Spacer()
+                            // Always-visible tap target for actions, with long-press on the poster
+                            // itself as a shortcut into the same menu — never gesture-only.
+                            Button { showActions = true } label: {
+                                Image(systemName: "ellipsis")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 20, height: 20)
+                                    .background(Color.black.opacity(0.45), in: Circle())
+                            }
+                            .accessibilityLabel("Quick Actions")
+                        }
                         Spacer()
-                        if isAdded { statusBadge(icon: "checkmark", tint: .green) }
+                        HStack {
+                            Spacer()
+                            if isAdded { statusBadge(icon: "checkmark", tint: .green) }
+                        }
                     }
                     .padding(6)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("searchGridTile.poster.\(item.id)")
 
-            HStack(alignment: .top, spacing: 4) {
-                VStack(alignment: .leading, spacing: 1) {
-                    // Two lines, not one — a truncated "Minions and…" is worse than an extra
-                    // line of caption height; the rating moved to the detail screen (with vote
-                    // count context) so this tile only needs to carry title + year.
-                    Text(item.title)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                        .lineLimit(2)
-                        .onLongPressGesture(minimumDuration: 0.4) { showActions = true }
+            // Fixed to two lines' worth of height regardless of actual title length, so a
+            // one-line title ("Minions") and a two-line title ("Minions & Monsters") leave their
+            // Year captions sitting at the same vertical position across a row.
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                    .lineLimit(2)
+                    .frame(height: 30, alignment: .top)
 
-                    if let year = item.releaseYear {
-                        Text(year)
-                            .font(.system(size: 11))
-                            .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                    }
-                }
-
-                Spacer(minLength: 2)
-
-                Button { showActions = true } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 13, weight: .bold))
+                if let year = item.releaseYear {
+                    Text(year)
+                        .font(.system(size: 11))
                         .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                        .frame(width: 20, height: 20)
                 }
-                .accessibilityLabel("Quick Actions")
             }
         }
         .popover(isPresented: $showActions) {
