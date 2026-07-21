@@ -418,15 +418,16 @@ private struct SearchGridTile: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("searchGridTile.poster.\(item.id)")
 
-            // Fixed to two lines' worth of height regardless of actual title length, so a
-            // one-line title ("Minions") and a two-line title ("Minions & Monsters") leave their
-            // Year captions sitting at the same vertical position across a row.
+            // Title sizes to however many lines it actually needs (1 or 2) — most titles are
+            // one line, so forcing a fixed two-line reservation left a permanent dead gap under
+            // the common case just to align the uncommon one. A mixed row can have slightly
+            // uneven caption heights and that's fine; a fixed-height hack across every screen
+            // size is not.
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(CinemaTheme.Colors.textPrimary)
                     .lineLimit(2)
-                    .frame(height: 30, alignment: .top)
 
                 if let year = item.releaseYear {
                     Text(year)
