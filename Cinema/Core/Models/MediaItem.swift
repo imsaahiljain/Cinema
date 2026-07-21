@@ -13,6 +13,7 @@ struct MediaItem: Identifiable, Hashable {
     let posterPath: String?
     let backdropPath: String?
     let releaseYear: String?
+    let releaseDate: Date?
     let voteAverage: Double?
     let voteCount: Int?
     let genreNames: [String]
@@ -33,6 +34,7 @@ struct MediaItem: Identifiable, Hashable {
         self.voteCount = result.voteCount
         let dateStr = result.releaseDate ?? result.firstAirDate ?? ""
         self.releaseYear = String(dateStr.prefix(4)).isEmpty ? nil : String(dateStr.prefix(4))
+        self.releaseDate = MediaItem.dateFormatter.date(from: dateStr)
         self.genreNames = result.genres.map { g in g.map { $0.name } }
             ?? (result.genreIds ?? []).compactMap { MediaItem.genreMap[$0] }
         self.runtime = result.runtime ?? result.episodeRunTime?.first
@@ -52,6 +54,7 @@ struct MediaItem: Identifiable, Hashable {
         self.voteCount = result.voteCount
         let dateStr = result.releaseDate ?? result.firstAirDate ?? ""
         self.releaseYear = String(dateStr.prefix(4)).isEmpty ? nil : String(dateStr.prefix(4))
+        self.releaseDate = MediaItem.dateFormatter.date(from: dateStr)
         self.genreNames = result.genres.map { g in g.map { $0.name } }
             ?? (result.genreIds ?? []).compactMap { MediaItem.genreMap[$0] }
         self.runtime = result.runtime ?? result.episodeRunTime?.first
@@ -60,15 +63,31 @@ struct MediaItem: Identifiable, Hashable {
     }
 
     init(id: Int, mediaType: MediaType, title: String, overview: String,
-         posterPath: String?, backdropPath: String?, releaseYear: String?,
+         posterPath: String?, backdropPath: String?, releaseYear: String?, releaseDate: Date? = nil,
          voteAverage: Double?, voteCount: Int? = nil, genreNames: [String] = [], runtime: Int? = nil,
          originalLanguage: String? = nil, popularity: Double? = nil) {
         self.id = id; self.mediaType = mediaType; self.title = title
         self.overview = overview; self.posterPath = posterPath
-        self.backdropPath = backdropPath; self.releaseYear = releaseYear
+        self.backdropPath = backdropPath; self.releaseYear = releaseYear; self.releaseDate = releaseDate
         self.voteAverage = voteAverage; self.voteCount = voteCount; self.genreNames = genreNames
         self.runtime = runtime; self.originalLanguage = originalLanguage
         self.popularity = popularity
+    }
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.calendar = Calendar(identifier: .gregorian)
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f
+    }()
+
+    /// Within the last 45 days — roughly a theatrical release window, long enough that a title
+    /// still reads as "just came out" without tagging half the catalog "New" all year.
+    var isRecentRelease: Bool {
+        guard let releaseDate else { return false }
+        let days = Calendar.current.dateComponents([.day], from: releaseDate, to: Date()).day ?? .max
+        return days >= 0 && days <= 45
     }
 
     var formattedRuntime: String? {
