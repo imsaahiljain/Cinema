@@ -268,6 +268,25 @@ final class CinemaUITests: XCTestCase {
         pause()
     }
 
+    func testMovieDetailScrollToBottom() throws {
+        login()
+        app.buttons["Search"].tap()
+
+        let searchField = app.textFields["Search films..."]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
+        searchField.tap()
+        searchField.typeText("Minions")
+
+        let firstPoster = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'searchGridTile.poster.'")).firstMatch
+        XCTAssertTrue(firstPoster.waitForExistence(timeout: 5))
+        firstPoster.tap()
+
+        Thread.sleep(forTimeInterval: 1.0)
+        app.swipeUp()
+        app.swipeUp()
+        pause()
+    }
+
     func testLongPressPosterOpensQuickActions() throws {
         login()
         app.buttons["Search"].tap()

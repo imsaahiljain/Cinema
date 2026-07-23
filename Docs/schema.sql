@@ -177,6 +177,27 @@ create index on public.custom_lists (user_id, created_at desc);
 create index on public.list_items (list_id);
 
 -- ─────────────────────────────────────────────
+-- FILM NOTES
+-- Private per-user note on any film, independent of ranked/watchlist
+-- status — works even for films the user hasn't watched yet. No public
+-- select policy: only the owning user can read their own notes.
+-- ─────────────────────────────────────────────
+create table public.film_notes (
+  id          uuid default uuid_generate_v4() primary key,
+  user_id     uuid references public.users(id) on delete cascade not null,
+  tmdb_id     integer not null,
+  media_type  text not null check (media_type in ('movie', 'tv')),
+  note        text not null default '',
+  updated_at  timestamptz not null default now(),
+  unique (user_id, tmdb_id, media_type)
+);
+
+alter table public.film_notes enable row level security;
+
+create policy "Users can manage own film notes"
+  on public.film_notes for all using (auth.uid() = user_id);
+
+-- ─────────────────────────────────────────────
 -- INDEXES
 -- ─────────────────────────────────────────────
 create index on public.ranked_items (user_id, elo_score desc);

@@ -6,6 +6,11 @@ Whenever a change like this gets decided or built, add an entry here (newest on 
 
 ---
 
+**2026-07-23 — Movie info screen: reordered around "have you actually seen it," private notes added**
+Rebuilt the content order below the (unchanged) hero banner: title/rating/trailer/genres → summary → Friends' Takes → Where to Watch → your private note → Cast & Crew, with Cast & Crew now always last. Reasoning: most films someone looks up on this screen are ones they find interesting but haven't watched — reference info (cast, crew) is only useful once you already know you care, so it shouldn't compete for the first screenful with the things that help you decide (what it's about, what your friends thought, where to watch it). Friends' Takes now also includes your own take ("You," if you've ranked it) and each friend row links through to their profile. Added a genuinely new feature alongside the reorder: a private per-film note (new `film_notes` table, RLS-restricted to the owning user — verified no other session, not even anon, can read it) for jotting something down about a film regardless of whether you've ranked or watchlisted it yet. Explicitly dropped an earlier gamification-heavy pass (medal badges, battle-history "beat X / lost to Y" language, streak chips) — decided it read as unattractive and presumed a watch history that, for browsing-stage films, doesn't exist yet.
+
+---
+
 **2026-07-21 — Search grid "tags": a gold "NEW" instead of a useless year**
 Search results used to show each film's release year, but outside a brand-new release, the year does nothing to help identify a movie — nobody recognizes "Minions" is the right result because it says "2015." Replaced it with the start of a tag system: a small gold "NEW" label (plain text, no filled pill) appears in that same spot for anything released in the last 45 days, and disappears entirely otherwise — no date info at all for older titles, since none was needed. First of what's meant to become a small family of at-a-glance tags (a "well-known" / legitimacy tag is next, logged in `CLAUDE.md`'s Post-Production Backlog for after launch). Good content angle: "we replaced a number nobody could use with a badge that tells you something you actually want to know."
 

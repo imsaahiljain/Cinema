@@ -5,10 +5,12 @@ import Supabase
 
 struct FriendTake: Identifiable {
     let id: UUID
+    let user: CinemaUser?
     let displayName: String
     let username: String
     let rankPosition: Int?
     let totalRanked: Int
+    var isSelf: Bool = false
 
     // Linear scale: #1 of N = 10.0, #N of N = 0.0
     var ratingOutOf10: Double? {
@@ -29,6 +31,11 @@ final class MovieInfoViewModel {
     var friendTakes: [FriendTake] = []
     var isLoading = false
 
+    var noteDraft: String = ""
+    private var savedNote: String = ""
+    var isSavingNote = false
+    var noteDirty: Bool { noteDraft != savedNote }
+
     func load(film: MediaItem, currentUserID: UUID?) async {
         isLoading = true
         defer { isLoading = false }
@@ -39,41 +46,60 @@ final class MovieInfoViewModel {
         trailerKey = await TMDBClient.shared.trailerKey(tmdbID: film.id, mediaType: film.mediaType)
 
         if let uid = currentUserID {
-            friendTakes = await loadFriendTakes(tmdbID: film.id, currentUserID: uid)
+            async let takes = loadFriendTakes(tmdbID: film.id, mediaType: film.mediaType, currentUserID: uid)
+            async let note = loadNote(tmdbID: film.id, mediaType: film.mediaType, currentUserID: uid)
+            friendTakes = await takes
+            await note
         }
     }
 
-    private func loadFriendTakes(tmdbID: Int, currentUserID: UUID) async -> [FriendTake] {
+    private func loadFriendTakes(tmdbID: Int, mediaType: MediaType, currentUserID: UUID) async -> [FriendTake] {
+        struct JustID: Decodable { let id: UUID }
+
+        var takes: [FriendTake] = []
+
+        // "Or you" — the current user's own take shows first, if they've ranked it.
+        if let mine: RankedItem = try? await SupabaseClient.shared
+            .from("ranked_items").select()
+            .eq("tmdb_id", value: tmdbID).eq("user_id", value: currentUserID)
+            .single().execute().value {
+            let allMine: [JustID] = (try? await SupabaseClient.shared
+                .from("ranked_items").select("id").eq("user_id", value: currentUserID)
+                .execute().value) ?? []
+            takes.append(FriendTake(
+                id: currentUserID, user: nil, displayName: "You", username: "",
+                rankPosition: mine.rankPosition, totalRanked: allMine.count, isSelf: true
+            ))
+        }
+
         struct FollowEdge: Decodable {
             let followingID: UUID
             enum CodingKeys: String, CodingKey { case followingID = "following_id" }
         }
         guard let edges: [FollowEdge] = try? await SupabaseClient.shared
             .from("follows").select("following_id").eq("follower_id", value: currentUserID)
-            .execute().value, !edges.isEmpty else { return [] }
+            .execute().value, !edges.isEmpty else { return takes }
 
         let ids = edges.map(\.followingID)
         guard let items: [RankedItem] = try? await SupabaseClient.shared
             .from("ranked_items").select()
             .eq("tmdb_id", value: tmdbID)
             .in("user_id", values: ids.map(\.uuidString))
-            .execute().value, !items.isEmpty else { return [] }
+            .execute().value, !items.isEmpty else { return takes }
 
         guard let profiles: [CinemaUser] = try? await SupabaseClient.shared
             .from("users").select()
             .in("id", values: items.map { $0.userID.uuidString })
-            .execute().value else { return [] }
+            .execute().value else { return takes }
 
         let profileMap = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
-        struct JustID: Decodable { let id: UUID }
-        var takes: [FriendTake] = []
         for item in items {
             guard let user = profileMap[item.userID] else { continue }
             let allItems: [JustID] = (try? await SupabaseClient.shared
                 .from("ranked_items").select("id").eq("user_id", value: item.userID)
                 .execute().value) ?? []
             takes.append(FriendTake(
-                id: item.userID,
+                id: item.userID, user: user,
                 displayName: user.displayName ?? user.username,
                 username: user.username,
                 rankPosition: item.rankPosition,
@@ -82,6 +108,30 @@ final class MovieInfoViewModel {
         }
         return takes
     }
+
+    private func loadNote(tmdbID: Int, mediaType: MediaType, currentUserID: UUID) async {
+        if let existing: FilmNote = try? await SupabaseClient.shared
+            .from("film_notes").select()
+            .eq("tmdb_id", value: tmdbID).eq("media_type", value: mediaType.rawValue)
+            .eq("user_id", value: currentUserID)
+            .single().execute().value {
+            noteDraft = existing.note
+            savedNote = existing.note
+        }
+    }
+
+    func saveNote(tmdbID: Int, mediaType: MediaType, currentUserID: UUID?) async {
+        guard let currentUserID, noteDirty else { return }
+        isSavingNote = true
+        defer { isSavingNote = false }
+        do {
+            try await SupabaseClient.shared.from("film_notes")
+                .upsert(["user_id": currentUserID.uuidString, "tmdb_id": String(tmdbID),
+                         "media_type": mediaType.rawValue, "note": noteDraft])
+                .execute()
+            savedNote = noteDraft
+        } catch {}
+    }
 }
 
 // MARK: - MovieInfoView
@@ -89,6 +139,7 @@ final class MovieInfoViewModel {
 struct MovieInfoView: View {
     let film: MediaItem
     @State private var vm = MovieInfoViewModel()
+    @State private var selectedFriend: CinemaUser?
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
@@ -114,6 +165,9 @@ struct MovieInfoView: View {
             .padding(.trailing, 16)
         }
         .task { await vm.load(film: film, currentUserID: appState.currentUser?.id) }
+        .sheet(item: $selectedFriend) { friend in
+            NavigationStack { UserProfileView(user: friend) }
+        }
     }
 
     // MARK: - Hero (not zoomed — uses .fit so full image shows)
@@ -227,24 +281,9 @@ struct MovieInfoView: View {
                 }
             }
 
-            // Director
-            if let director = vm.director {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Director").font(.system(size: 12, weight: .semibold)).foregroundStyle(CinemaTheme.Colors.textSecondary)
-                    Text(director).font(.system(size: 16, weight: .semibold)).foregroundStyle(CinemaTheme.Colors.textPrimary)
-                }
-            }
-
-            // Cast
-            if let cast = vm.credits?.cast, !cast.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    SectionLabel("Cast")
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: 16) {
-                            ForEach(cast.prefix(12)) { person in CastCard(person: person) }
-                        }
-                    }
-                }
+            // Friends' (and your own) takes — only shows up if someone's actually seen it
+            if !vm.friendTakes.isEmpty {
+                friendTakesSection
             }
 
             // Where to Watch
@@ -252,13 +291,77 @@ struct MovieInfoView: View {
                 whereToWatchSection(providers)
             }
 
-            // Friends' Takes
-            if !vm.friendTakes.isEmpty {
-                friendTakesSection
+            // Your private note — sits right before Cast & Crew
+            noteSection
+
+            // Cast & Crew — always last
+            if vm.director != nil || !(vm.credits?.cast.isEmpty ?? true) {
+                castAndCrewSection
             }
         }
         .padding(.horizontal, CinemaTheme.Spacing.lg)
         .padding(.top, 16)
+    }
+
+    // MARK: - Cast & Crew (bottom of screen)
+
+    private var castAndCrewSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionLabel("Cast & Crew")
+
+            if let director = vm.director {
+                HStack(spacing: 6) {
+                    Text("Director").font(.system(size: 13)).foregroundStyle(CinemaTheme.Colors.textSecondary)
+                    Text(director).font(.system(size: 13, weight: .semibold)).foregroundStyle(CinemaTheme.Colors.textPrimary)
+                }
+            }
+
+            if let cast = vm.credits?.cast, !cast.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 16) {
+                        ForEach(cast.prefix(12)) { person in CastCard(person: person) }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Note (private — only the current user ever sees their own)
+
+    private var noteSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                SectionLabel("Your Note")
+                Spacer()
+                if vm.noteDirty {
+                    Button {
+                        Task {
+                            await vm.saveNote(tmdbID: film.id, mediaType: film.mediaType, currentUserID: appState.currentUser?.id)
+                        }
+                    } label: {
+                        Text(vm.isSavingNote ? "Saving…" : "Save")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(CinemaTheme.Colors.gold)
+                    }
+                    .disabled(vm.isSavingNote)
+                }
+            }
+            Text("Private — only you can see this.")
+                .font(.system(size: 11))
+                .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.6))
+            TextEditor(text: $vm.noteDraft)
+                .font(.system(size: 14))
+                .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 70)
+                .padding(10)
+                .background(CinemaTheme.Colors.surface)
+                .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.sm))
+                .overlay(
+                    RoundedRectangle(cornerRadius: CinemaTheme.Radius.sm)
+                        .strokeBorder(CinemaTheme.Colors.border, lineWidth: 1)
+                )
+        }
     }
 
     // MARK: - Action Buttons
@@ -340,39 +443,50 @@ struct MovieInfoView: View {
             SectionLabel("Friends' Takes")
             VStack(spacing: 8) {
                 ForEach(vm.friendTakes) { take in
-                    HStack(spacing: 12) {
-                        ZStack {
-                            Circle().fill(CinemaTheme.Colors.surface).frame(width: 36, height: 36)
-                                .overlay(Circle().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
-                            Text(take.displayName.prefix(1).uppercased())
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(take.displayName)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                            if let pos = take.rankPosition {
-                                Text("Ranked #\(pos) on their list")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                            }
-                        }
-                        Spacer()
-                        if let rating = take.ratingOutOf10 {
-                            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                                Text(String(format: "%.1f", rating))
-                                    .font(.system(size: 16, weight: .bold))
+                    Button {
+                        if !take.isSelf, let user = take.user { selectedFriend = user }
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle().fill(CinemaTheme.Colors.surface).frame(width: 36, height: 36)
+                                    .overlay(Circle().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
+                                Text(take.displayName.prefix(1).uppercased())
+                                    .font(.system(size: 14, weight: .bold))
                                     .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                                Text("/ 10")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(take.displayName)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                                if let pos = take.rankPosition {
+                                    Text(take.isSelf ? "Ranked #\(pos) on your list" : "Ranked #\(pos) on their list")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                                }
+                            }
+                            Spacer()
+                            if let rating = take.ratingOutOf10 {
+                                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                                    Text(String(format: "%.1f", rating))
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                                    Text("/ 10")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                                }
+                            }
+                            if !take.isSelf {
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.5))
                             }
                         }
+                        .padding(12)
+                        .background(CinemaTheme.Colors.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.sm))
                     }
-                    .padding(12)
-                    .background(CinemaTheme.Colors.surface)
-                    .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.sm))
+                    .buttonStyle(.plain)
+                    .disabled(take.isSelf)
                 }
             }
         }

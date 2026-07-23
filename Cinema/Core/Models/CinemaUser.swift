@@ -40,6 +40,24 @@ struct RankedItem: Identifiable, Codable {
     }
 }
 
+struct FilmNote: Identifiable, Codable {
+    let id: UUID
+    let userID: UUID
+    let tmdbID: Int
+    let mediaType: MediaType
+    var note: String
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userID = "user_id"
+        case tmdbID = "tmdb_id"
+        case mediaType = "media_type"
+        case note
+        case updatedAt = "updated_at"
+    }
+}
+
 struct ELOMatch: Identifiable, Codable {
     let id: UUID
     let userID: UUID
