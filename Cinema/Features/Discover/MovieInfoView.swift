@@ -19,18 +19,6 @@ struct FriendTake: Identifiable {
     }
 }
 
-// A TMDB credits `crew` array is everyone credited on the production — often 100+ people
-// (camera department, sound, art department...) for a major release. Showing all of them
-// would bury the names people actually look for, so we curate down to the handful of jobs
-// that matter to a viewer, same convention most movie apps use for "Cast & Crew".
-struct CrewCredit: Identifiable {
-    let id = UUID()
-    let job: String
-    let name: String
-}
-
-private let keyCrewJobs = ["Director", "Writer", "Screenplay", "Producer", "Director of Photography", "Original Music Composer", "Editor"]
-
 // MARK: - ViewModel
 
 @Observable
@@ -39,7 +27,8 @@ final class MovieInfoViewModel {
     var credits: TMDBCredits?
     var watchProviders: TMDBRegionProviders?
     var trailerKey: String?
-    var keyCrew: [CrewCredit] = []
+    var director: String?
+    var isInTheaters = false
     var friendTakes: [FriendTake] = []
     var isLoading = false
 
@@ -53,15 +42,14 @@ final class MovieInfoViewModel {
         defer { isLoading = false }
 
         credits = try? await TMDBClient.shared.credits(tmdbID: film.id, mediaType: film.mediaType)
-        if let crew = credits?.crew {
-            var seenNames = Set<String>()
-            keyCrew = keyCrewJobs.compactMap { job in
-                guard let person = crew.first(where: { $0.job == job }), !seenNames.contains(person.name) else { return nil }
-                seenNames.insert(person.name)
-                return CrewCredit(job: job, name: person.name)
-            }
-        }
+        director = credits?.crew.first(where: { $0.job == "Director" })?.name
         watchProviders = try? await TMDBClient.shared.watchProviders(tmdbID: film.id, mediaType: film.mediaType)
+        // TMDB's own "now playing" list, fetched fresh every time this screen opens — not a
+        // fixed release-date heuristic, so the "In Theaters Now" chip stops showing itself the
+        // moment TMDB shows this title has left theaters, no manual expiry logic needed.
+        if film.mediaType == .movie, let nowPlaying = try? await TMDBClient.shared.nowPlaying() {
+            isInTheaters = nowPlaying.contains { $0.id == film.id }
+        }
         trailerKey = await TMDBClient.shared.trailerKey(tmdbID: film.id, mediaType: film.mediaType)
 
         if let uid = currentUserID {
@@ -313,7 +301,7 @@ struct MovieInfoView: View {
             noteSection
 
             // Cast & Crew — always last
-            if !vm.keyCrew.isEmpty || !(vm.credits?.cast.isEmpty ?? true) {
+            if vm.director != nil || !(vm.credits?.cast.isEmpty ?? true) {
                 castAndCrewSection
             }
         }
@@ -322,19 +310,21 @@ struct MovieInfoView: View {
     }
 
     // MARK: - Cast & Crew (bottom of screen)
+    //
+    // Popcorn is a social ranking app, not a film-credits database — we deliberately don't
+    // list Writer/Producer/Cinematographer/Editor here. Director is the one crew role the
+    // average moviegoer actually recognizes and treats as a signal ("a Nolan film"); everyone
+    // else in the credits is industry-recognition territory, not a reason someone picks a
+    // movie. Keep this section to Director + the main cast, nothing more.
 
     private var castAndCrewSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionLabel("Cast & Crew")
 
-            if !vm.keyCrew.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(vm.keyCrew) { credit in
-                        HStack(spacing: 6) {
-                            Text(credit.job).font(.system(size: 13)).foregroundStyle(CinemaTheme.Colors.textSecondary)
-                            Text(credit.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(CinemaTheme.Colors.textPrimary)
-                        }
-                    }
+            if let director = vm.director {
+                HStack(spacing: 6) {
+                    Text("Director").font(.system(size: 13)).foregroundStyle(CinemaTheme.Colors.textSecondary)
+                    Text(director).font(.system(size: 13, weight: .semibold)).foregroundStyle(CinemaTheme.Colors.textPrimary)
                 }
             }
 
@@ -424,7 +414,7 @@ struct MovieInfoView: View {
 
         if !streaming.isEmpty || !rentBuy.isEmpty {
             whereToWatchSection(vm.watchProviders!)
-        } else if !film.isUpcoming && film.isRecentRelease {
+        } else if vm.isInTheaters {
             HStack(spacing: 8) {
                 Image(systemName: "ticket.fill")
                     .font(.system(size: 13))
