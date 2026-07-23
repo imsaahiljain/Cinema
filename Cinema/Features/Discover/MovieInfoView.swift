@@ -19,6 +19,18 @@ struct FriendTake: Identifiable {
     }
 }
 
+// A TMDB credits `crew` array is everyone credited on the production — often 100+ people
+// (camera department, sound, art department...) for a major release. Showing all of them
+// would bury the names people actually look for, so we curate down to the handful of jobs
+// that matter to a viewer, same convention most movie apps use for "Cast & Crew".
+struct CrewCredit: Identifiable {
+    let id = UUID()
+    let job: String
+    let name: String
+}
+
+private let keyCrewJobs = ["Director", "Writer", "Screenplay", "Producer", "Director of Photography", "Original Music Composer", "Editor"]
+
 // MARK: - ViewModel
 
 @Observable
@@ -27,7 +39,7 @@ final class MovieInfoViewModel {
     var credits: TMDBCredits?
     var watchProviders: TMDBRegionProviders?
     var trailerKey: String?
-    var director: String?
+    var keyCrew: [CrewCredit] = []
     var friendTakes: [FriendTake] = []
     var isLoading = false
 
@@ -41,7 +53,14 @@ final class MovieInfoViewModel {
         defer { isLoading = false }
 
         credits = try? await TMDBClient.shared.credits(tmdbID: film.id, mediaType: film.mediaType)
-        director = credits?.crew.first(where: { $0.job == "Director" })?.name
+        if let crew = credits?.crew {
+            var seenNames = Set<String>()
+            keyCrew = keyCrewJobs.compactMap { job in
+                guard let person = crew.first(where: { $0.job == job }), !seenNames.contains(person.name) else { return nil }
+                seenNames.insert(person.name)
+                return CrewCredit(job: job, name: person.name)
+            }
+        }
         watchProviders = try? await TMDBClient.shared.watchProviders(tmdbID: film.id, mediaType: film.mediaType)
         trailerKey = await TMDBClient.shared.trailerKey(tmdbID: film.id, mediaType: film.mediaType)
 
@@ -286,16 +305,15 @@ struct MovieInfoView: View {
                 friendTakesSection
             }
 
-            // Where to Watch
-            if let providers = vm.watchProviders {
-                whereToWatchSection(providers)
-            }
+            // Where to Watch — or, if nothing streams/rents it yet and it's still in its
+            // theatrical window, a quiet "In Theaters" chip instead of an empty section.
+            watchAvailabilitySection
 
             // Your private note — sits right before Cast & Crew
             noteSection
 
             // Cast & Crew — always last
-            if vm.director != nil || !(vm.credits?.cast.isEmpty ?? true) {
+            if !vm.keyCrew.isEmpty || !(vm.credits?.cast.isEmpty ?? true) {
                 castAndCrewSection
             }
         }
@@ -309,10 +327,14 @@ struct MovieInfoView: View {
         VStack(alignment: .leading, spacing: 14) {
             SectionLabel("Cast & Crew")
 
-            if let director = vm.director {
-                HStack(spacing: 6) {
-                    Text("Director").font(.system(size: 13)).foregroundStyle(CinemaTheme.Colors.textSecondary)
-                    Text(director).font(.system(size: 13, weight: .semibold)).foregroundStyle(CinemaTheme.Colors.textPrimary)
+            if !vm.keyCrew.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(vm.keyCrew) { credit in
+                        HStack(spacing: 6) {
+                            Text(credit.job).font(.system(size: 13)).foregroundStyle(CinemaTheme.Colors.textSecondary)
+                            Text(credit.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(CinemaTheme.Colors.textPrimary)
+                        }
+                    }
                 }
             }
 
@@ -391,6 +413,32 @@ struct MovieInfoView: View {
     }
 
     // MARK: - Where to Watch
+
+    // Picks between the full streaming/rental section and a quiet "In Theaters" chip —
+    // a film mid-theatrical-run has no flatrate/rent/buy providers yet, but "you can't
+    // stream this, nothing to show" reads as broken when the real answer is "go to a theater."
+    @ViewBuilder
+    private var watchAvailabilitySection: some View {
+        let streaming = vm.watchProviders?.flatrate ?? []
+        let rentBuy = Array(Set((vm.watchProviders?.rent ?? []) + (vm.watchProviders?.buy ?? [])).prefix(5))
+
+        if !streaming.isEmpty || !rentBuy.isEmpty {
+            whereToWatchSection(vm.watchProviders!)
+        } else if !film.isUpcoming && film.isRecentRelease {
+            HStack(spacing: 8) {
+                Image(systemName: "ticket.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(CinemaTheme.Colors.gold)
+                Text("In Theaters Now")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .overlay(Capsule().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
+            .clipShape(Capsule())
+        }
+    }
 
     @ViewBuilder
     private func whereToWatchSection(_ providers: TMDBRegionProviders) -> some View {
