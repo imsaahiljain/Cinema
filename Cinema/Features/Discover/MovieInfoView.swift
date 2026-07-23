@@ -27,7 +27,7 @@ final class MovieInfoViewModel {
     var credits: TMDBCredits?
     var watchProviders: TMDBRegionProviders?
     var trailerKey: String?
-    var director: String?
+    var director: TMDBPerson?
     var isInTheaters = false
     var friendTakes: [FriendTake] = []
     var isLoading = false
@@ -42,7 +42,7 @@ final class MovieInfoViewModel {
         defer { isLoading = false }
 
         credits = try? await TMDBClient.shared.credits(tmdbID: film.id, mediaType: film.mediaType)
-        director = credits?.crew.first(where: { $0.job == "Director" })?.name
+        director = credits?.crew.first(where: { $0.job == "Director" })
         watchProviders = try? await TMDBClient.shared.watchProviders(tmdbID: film.id, mediaType: film.mediaType)
         // TMDB's own "now playing" list, fetched fresh every time this screen opens — not a
         // fixed release-date heuristic, so the "In Theaters Now" chip stops showing itself the
@@ -318,20 +318,21 @@ struct MovieInfoView: View {
     // movie. Keep this section to Director + the main cast, nothing more.
 
     private var castAndCrewSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        // Director rendered as the same photo/name/role card as everyone else in Cast —
+        // one consistent visual language for "people in this movie" instead of singling
+        // the director out as a plain text line.
+        let castSlots = vm.director == nil ? 12 : 11
+        let people = ([vm.director].compactMap { $0 }) + Array((vm.credits?.cast ?? []).prefix(castSlots))
+
+        return VStack(alignment: .leading, spacing: 14) {
             SectionLabel("Cast & Crew")
 
-            if let director = vm.director {
-                HStack(spacing: 6) {
-                    Text("Director").font(.system(size: 13)).foregroundStyle(CinemaTheme.Colors.textSecondary)
-                    Text(director).font(.system(size: 13, weight: .semibold)).foregroundStyle(CinemaTheme.Colors.textPrimary)
-                }
-            }
-
-            if let cast = vm.credits?.cast, !cast.isEmpty {
+            if !people.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
-                        ForEach(cast.prefix(12)) { person in CastCard(person: person) }
+                        ForEach(people) { person in
+                            CastCard(person: person, roleOverride: person.id == vm.director?.id ? "Director" : nil)
+                        }
                     }
                 }
             }
@@ -549,6 +550,7 @@ private struct SectionLabel: View {
 
 private struct CastCard: View {
     let person: TMDBPerson
+    var roleOverride: String? = nil
     var body: some View {
         VStack(spacing: 8) {
             Group {
@@ -565,8 +567,8 @@ private struct CastCard: View {
             VStack(spacing: 2) {
                 Text(person.name).font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(CinemaTheme.Colors.textPrimary).lineLimit(2).multilineTextAlignment(.center)
-                if let ch = person.character, !ch.isEmpty {
-                    Text(ch).font(.system(size: 10)).foregroundStyle(CinemaTheme.Colors.textSecondary).lineLimit(1)
+                if let role = roleOverride ?? person.character, !role.isEmpty {
+                    Text(role).font(.system(size: 10)).foregroundStyle(CinemaTheme.Colors.textSecondary).lineLimit(1)
                 }
             }
             .frame(width: 80)
