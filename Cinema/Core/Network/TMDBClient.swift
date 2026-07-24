@@ -147,6 +147,23 @@ struct TMDBClient {
         return response.results["US"]
     }
 
+    /// US content rating — "PG-13"/"R" for movies (from `release_dates`, the first non-blank
+    /// certification under the US entry), "TV-MA"/"TV-14" etc for TV (from `content_ratings`).
+    /// Two different TMDB endpoints/shapes because movie certifications vary by release type
+    /// (theatrical vs. digital) within a country while TV ratings don't.
+    func contentRating(tmdbID: Int, mediaType: MediaType) async -> String? {
+        if mediaType == .movie {
+            guard let response: TMDBReleaseDatesResponse = try? await fetch(baseURL.appending(path: "movie/\(tmdbID)/release_dates")) else { return nil }
+            let certification = response.results.first(where: { $0.iso31661 == "US" })?
+                .releaseDates.first(where: { !$0.certification.isEmpty })?.certification
+            return (certification?.isEmpty ?? true) ? nil : certification
+        } else {
+            guard let response: TMDBContentRatingsResponse = try? await fetch(baseURL.appending(path: "tv/\(tmdbID)/content_ratings")) else { return nil }
+            let rating = response.results.first(where: { $0.iso31661 == "US" })?.rating
+            return (rating?.isEmpty ?? true) ? nil : rating
+        }
+    }
+
     func trailerKey(tmdbID: Int, mediaType: MediaType) async -> String? {
         let path = mediaType == .movie ? "movie/\(tmdbID)/videos" : "tv/\(tmdbID)/videos"
         guard let response: TMDBVideoResponse = try? await fetch(baseURL.appending(path: path)) else { return nil }
@@ -236,6 +253,13 @@ struct TMDBWatchProvider: Decodable {
     let providerName: String
     let logoPath: String
 }
+
+struct TMDBReleaseDatesResponse: Decodable { let results: [TMDBReleaseDatesCountry] }
+struct TMDBReleaseDatesCountry: Decodable { let iso31661: String; let releaseDates: [TMDBReleaseDateEntry] }
+struct TMDBReleaseDateEntry: Decodable { let certification: String }
+
+struct TMDBContentRatingsResponse: Decodable { let results: [TMDBContentRatingCountry] }
+struct TMDBContentRatingCountry: Decodable { let iso31661: String; let rating: String }
 
 struct TMDBVideoResponse: Decodable { let results: [TMDBVideo] }
 

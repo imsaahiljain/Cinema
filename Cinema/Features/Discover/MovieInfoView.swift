@@ -28,6 +28,7 @@ final class MovieInfoViewModel {
     var watchProviders: TMDBRegionProviders?
     var trailerKey: String?
     var director: TMDBPerson?
+    var contentRating: String?
     var isInTheaters = false
     var friendTakes: [FriendTake] = []
     var isLoading = false
@@ -51,6 +52,7 @@ final class MovieInfoViewModel {
             isInTheaters = nowPlaying.contains { $0.id == film.id }
         }
         trailerKey = await TMDBClient.shared.trailerKey(tmdbID: film.id, mediaType: film.mediaType)
+        contentRating = await TMDBClient.shared.contentRating(tmdbID: film.id, mediaType: film.mediaType)
 
         if let uid = currentUserID {
             async let takes = loadFriendTakes(tmdbID: film.id, mediaType: film.mediaType, currentUserID: uid)
@@ -234,6 +236,15 @@ struct MovieInfoView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 8) {
+                    if let rating = vm.contentRating {
+                        Text(rating)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
+                        metaText("·")
+                    }
                     if let year = film.releaseYear { metaText(year) }
                     if let rt = film.formattedRuntime { metaText("·"); metaText(rt) }
                     if let score = film.voteAverage, score > 0 {
