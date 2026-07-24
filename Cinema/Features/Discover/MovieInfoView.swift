@@ -461,8 +461,8 @@ struct MovieInfoView: View {
 
     @ViewBuilder
     private func whereToWatchSection(_ providers: TMDBRegionProviders) -> some View {
-        let streaming = dedupedByBaseProvider(providers.flatrate ?? [])
-        let rentBuy = orderedUnique((providers.rent ?? []) + (providers.buy ?? []))
+        let streaming = curatedProviders(providers.flatrate ?? [])
+        let rentBuy = curatedProviders((providers.rent ?? []) + (providers.buy ?? []))
 
         if !streaming.isEmpty || !rentBuy.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
@@ -503,38 +503,53 @@ struct MovieInfoView: View {
         }
     }
 
-    // Preserves TMDB's own order — never route provider lists through a bare Set for display;
-    // Swift's Set/Dictionary iteration order is randomized per process launch (a security
-    // measure against hash-flooding), so `Set(...).prefix(n)` silently returns a different
-    // arbitrary subset every time the app runs. That looked like "providers disappearing" and
-    // was actually this bug, not stale or wrong API data.
-    private func orderedUnique(_ providers: [TMDBWatchProvider]) -> [TMDBWatchProvider] {
-        var seenIDs: Set<Int> = []
-        return providers.filter { seenIDs.insert($0.providerId).inserted }
-    }
+    // The streaming platforms Popcorn actually shows — cut down from TMDB's full list of 250+
+    // tracked providers (almost all of them tiny regional or reseller-only services nobody
+    // uses) to a deliberate, hand-picked set. Keyed by provider ID rather than name: a name
+    // string like "Paramount Plus Essential" is fragile to match against, an ID isn't, and
+    // TMDB's own naming/casing for the same brand isn't even consistent across entries.
+    //
+    // Variants that give access to the exact same catalog as their base brand — a subscription
+    // tier (Paramount+ Essential/Premium, Peacock Premium/Premium Plus), an ad-supported profile
+    // (Netflix Standard with Ads, Netflix Kids), or paying through Amazon/Apple/Roku instead of
+    // directly — collapse to one canonical name below, so the row shows one tile per real
+    // choice. Variants that are a genuinely smaller/different catalog (Amazon's free-for-anyone
+    // ad-supported tier, Fandango At Home's free tier) get their own distinct name so they never
+    // silently merge into — and get mistaken for — the full paid catalog's tile.
+    private let allowedProviders: [Int: String] = [
+        8: "Netflix", 1796: "Netflix", 175: "Netflix",
+        9: "Amazon Prime Video", 2100: "Amazon Prime Video", 613: "Amazon Prime Video (Free)",
+        350: "Apple TV", 2: "Apple TV",
+        337: "Disney Plus",
+        15: "Hulu",
+        1899: "HBO Max", 1825: "HBO Max",
+        283: "Crunchyroll", 1968: "Crunchyroll",
+        2303: "Paramount+", 2616: "Paramount+", 582: "Paramount+", 633: "Paramount+", 1853: "Paramount+",
+        386: "Peacock", 387: "Peacock", 2553: "Peacock",
+        3: "Google Play Movies",
+        192: "YouTube",
+        7: "Fandango At Home", 332: "Fandango At Home (Free)",
+    ]
 
-    // A "channel" entry (e.g. "HBO Max Amazon Channel") is the same underlying subscription as
-    // its base service, just billed and accessed through another platform — not different
-    // content. Collapse to one tile per base service, preferring the direct entry when both
-    // appear so the row doesn't show what looks like two unrelated options for one thing.
-    private func dedupedByBaseProvider(_ providers: [TMDBWatchProvider]) -> [TMDBWatchProvider] {
-        func baseName(_ name: String) -> String {
-            name.replacingOccurrences(of: " Amazon Channel", with: "")
-                .replacingOccurrences(of: " Roku Premium Channel", with: "")
-                .replacingOccurrences(of: " Apple TV Channel", with: "")
-                .replacingOccurrences(of: " Channel", with: "")
-        }
+    // Drops anything not on the allowlist, collapses same-catalog variants to one tile
+    // (preferring the direct entry over a "via Amazon/Apple/Roku Channel" one when both are
+    // present), and — critically — never routes through a bare Set, since Swift's Set/Dictionary
+    // iteration order is randomized per process launch. Order comes from TMDB's own list.
+    private func curatedProviders(_ providers: [TMDBWatchProvider]) -> [TMDBWatchProvider] {
         var chosen: [String: TMDBWatchProvider] = [:]
         for provider in providers {
-            let base = baseName(provider.providerName)
-            if let existing = chosen[base], !existing.providerName.contains("Channel") { continue }
-            chosen[base] = provider
+            guard let canonicalName = allowedProviders[provider.providerId] else { continue }
+            if let existing = chosen[canonicalName], !existing.providerName.localizedCaseInsensitiveContains("channel") {
+                continue
+            }
+            chosen[canonicalName] = provider
         }
-        var addedBases: Set<String> = []
+        var addedNames: Set<String> = []
         return providers.compactMap { provider in
-            let base = baseName(provider.providerName)
-            guard !addedBases.contains(base), let winner = chosen[base] else { return nil }
-            addedBases.insert(base)
+            guard let canonicalName = allowedProviders[provider.providerId],
+                  !addedNames.contains(canonicalName),
+                  let winner = chosen[canonicalName] else { return nil }
+            addedNames.insert(canonicalName)
             return winner
         }
     }
