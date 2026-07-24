@@ -31,7 +31,7 @@ Popcorn is a high-velocity social media app for movie/TV taste. Think Beli for r
 **Branch:** `main` is the working branch. There was a `v2-rebuild` branch where features had been deliberately stripped to stubs for a from-scratch rebuild with a nicer tab bar; after comparing both live in the simulator, the user chose to consolidate back onto `main` instead, since it already has more built-out screens (Profile, Search, Discover all have real content; `v2-rebuild`'s equivalents were still stubs). `v2-rebuild` still exists on GitHub and has two things worth cherry-picking onto `main` if not already done by the time you read this: (1) a nicer floating glass-pill tab bar, and (2) a fix for a real bug — **the core "This or That" ranking flow existed as a screen but was never wired to any button anywhere in the app**; adding a film via Search/Discover just silently upserted a flat ELO score instead of triggering a comparison battle. Check whether `Cinema/Features/Search/SearchView.swift` and `Cinema/Features/Discover/MovieInfoView.swift` already launch `RankingView` after adding a film — if not, that port still needs to happen.
 
 **Working style the user has explicitly asked for:**
-- **One feature at a time.** Implement it, verify it actually works (build + real interaction via XCUITest, not just "it compiles"), then stop and let the user react before starting the next one. Don't batch multiple features into one pass even if they feel related — this was called out directly after Ranking/Search/Discover/Lists all got built together in one go.
+- **One feature at a time.** Implement it, verify it actually works (build + real interaction via the simulator, not just "it compiles"), then stop and let the user react before starting the next one. Don't batch multiple features into one pass even if they feel related — this was called out directly after Ranking/Search/Discover/Lists all got built together in one go.
 - **Be transparent, not just fast, when something isn't working.** If a debugging approach is fundamentally wrong (e.g. screen-pixel clicking), say so and switch rather than iterating blindly on the wrong tool.
 - The user is non-technical — they will not know what "PR," "gh," "xcodegen," or similar terms mean. Explain in plain language, and don't ask them to run terminal commands themselves unless truly stuck (e.g. granting a macOS permission, which only they can click through).
 - This is meant to run close to autonomously — the user wants to give feedback periodically, not approve every step.
@@ -106,7 +106,7 @@ If it's missing, the app will not compile (`Secrets.supabaseURL` etc. won't reso
 
 ## Development Setup
 1. Xcode 26+ required (iOS 26 target for `.glassEffect()`)
-2. **No Node.js, npm, or Homebrew needed for anything in this project.** The app itself is pure SwiftUI/SPM. Tooling (XcodeBuildMCP, ios-simulator-mcp, etc.) is unnecessary — everything below is driven directly through `xcodebuild`/`xcrun simctl`/XCUITest, which ship with Xcode. Don't register those MCP servers; if asked to, explain this instead. When a CLI tool genuinely is needed (`xcodegen`, `gh`), fetch the prebuilt macOS binary from its GitHub releases directly rather than installing Homebrew for it — both already live at `~/.local/bin/`, which is on `PATH`.
+2. **No Node.js, npm, or Homebrew needed for anything in this project.** The app itself is pure SwiftUI/SPM. Building is still plain `xcodebuild`; running/inspecting the app goes through the built-in iOS Simulator tool (`mcp__Claude_Code_iOS_Simulator__*`, no install needed — see "Building, Running & Verifying" below) with `xcrun devicectl` for the physical device and a narrow XCUITest fallback for custom gestures. Don't register third-party alternatives (XcodeBuildMCP, ios-simulator-mcp, etc.) — they'd be redundant with what's already available. When a CLI tool genuinely is needed (`xcodegen`, `gh`), fetch the prebuilt macOS binary from its GitHub releases directly rather than installing Homebrew for it — both already live at `~/.local/bin/`, which is on `PATH`.
 3. **`gh` (GitHub CLI) is installed** at `~/.local/bin/gh` but not authenticated — nothing in the current workflow needs it (commits push straight to `main`, no PR/issue workflow). Run `gh auth login` only if that changes.
 4. Simulator is the default target for day-to-day work (no Apple Developer Team needed — `DEVELOPMENT_TEAM: ""` and unsigned builds work fine for `platform=iOS Simulator` destinations). Physical-device builds need a real Team ID in `project.yml`, which hasn't been set up yet — ask the user for it (Xcode → Settings → Accounts, or developer.apple.com → Membership) only when device testing actually becomes necessary.
 5. Supabase: schema already applied to the live project (`Docs/schema.sql` is the source of truth if it ever needs reapplying). The project can get **paused** on the free tier — if API calls start failing with DNS/connection errors, that's the first thing to check; the user has to click "Restore" in the Supabase dashboard, it doesn't self-resume. A Personal Access Token for the Management API is saved at `~/.supabase/access-token`.
@@ -156,11 +156,12 @@ The project's `service_role` key (bypasses Row Level Security for admin-level *d
 
 ## Building, Running & Verifying (Claude must follow this)
 
-The project is driven entirely through `xcodebuild` / `xcrun simctl` / XCUITest — no XcodeBuildMCP, no ios-simulator-mcp, no Node. All commands below run straight in Bash.
+**Never report a visual/UI change as done without actually looking at a screenshot yourself first.** Build → install → launch → screenshot → look at the image → fix what's visibly wrong → only then tell the user it's ready. Describing a change instead of verifying it (or installing straight to the user's physical device without a simulator look first) has produced real, embarrassing bugs that a screenshot would have caught immediately (a broken layout rendering off-screen, cropped images, mismatched colors) — each one cost several rounds of back-and-forth to diagnose and fix. The simulator loop is fast; use it before every device install, not instead of one.
 
-**Never report a visual/UI change as done without actually looking at a screenshot yourself first.** Build → install → launch → screenshot → Read the PNG → fix what's visibly wrong → only then tell the user it's ready. Describing a change instead of verifying it (or installing straight to the user's physical device without a simulator look first) has produced real, embarrassing bugs that a screenshot would have caught immediately (a broken layout rendering off-screen, cropped images, mismatched colors) — each one cost several rounds of back-and-forth to diagnose and fix. The simulator loop is fast; use it before every device install, not instead of one.
+Compiling is still real `xcodebuild` no matter which path below you take — nothing makes Swift itself compile faster. What's different is everything *after* a build: driving and inspecting the running app goes through the **iOS Simulator tool** (`mcp__Claude_Code_iOS_Simulator__*`), which replaced the old `xcrun simctl` + XCUITest loop as the default. XCUITest is kept, but only for one specific gap — see below.
 
-**Regenerate the Xcode project when Swift files are added, moved, or removed.** `Cinema.xcodeproj` uses explicit file references (not Xcode 16's auto-sync folders), so new files are invisible to the build until regenerated:
+### Regenerate the Xcode project when Swift files are added, moved, or removed
+`Cinema.xcodeproj` uses explicit file references (not Xcode 16's auto-sync folders), so new files are invisible to the build until regenerated:
 ```bash
 xcodegen generate --spec project.yml   # xcodegen is on PATH at ~/.local/bin/xcodegen
 ```
@@ -172,31 +173,64 @@ mkdir -p ~/.local/bin && cp /tmp/xcodegen_install/xcodegen/bin/xcodegen ~/.local
 ```
 Known gotcha: xcodegen silently re-adds `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` as a default even if omitted from `project.yml` — since no `AppIcon` asset set exists yet, this breaks the build. `project.yml` explicitly sets it to `""` to blank it out; don't remove that line until a real app icon asset is added.
 
-**Known gotcha, more important: `xcodegen generate` regenerates `Cinema/Resources/Info.plist` from `project.yml`'s `targets.Cinema.info.properties` block on *every single run*.** Hand-editing `Info.plist` directly (adding a key, changing a string like `NSContactsUsageDescription`) works until the next `xcodegen generate`, which silently reverts it back to whatever `project.yml` says. Always make Info.plist changes in `project.yml`'s `info.properties`, never in the `.plist` file directly. This cost real time twice in one session: once discovering the gotcha itself, and again because a fix made on a feature branch didn't get carried back to `main` and silently reverted there too the next time `main`'s `project.yml` was regenerated from.
+**Known gotcha, more important: `xcodegen generate` regenerates `Cinema/Resources/Info.plist` from `project.yml`'s `targets.Cinema.info.properties` block on *every single run*.** Hand-editing `Info.plist` directly works until the next `xcodegen generate`, which silently reverts it. Always make Info.plist changes in `project.yml`'s `info.properties`, never in the `.plist` file directly.
 
-**Build for the simulator:**
+### Building
+Two equivalent paths — pick whichever fits the turn:
+
+**The simulator tool's own build action** — headless, non-blocking, good when the rest of the turn is also simulator-tool calls:
+```
+mcp__Claude_Code_iOS_Simulator__build({action: "build", project_path: "/Users/saahiljain/Documents/Popcorn IOS/Cinema.xcodeproj", scheme: "Cinema", device: "iPhone 17"})
+→ returns a build_id immediately
+mcp__Claude_Code_iOS_Simulator__build({action: "build_status", build_id: "..."})
+→ poll this; on success it returns the built .app path plus a ready-to-paste launch call
+```
+
+**Plain `xcodebuild` in Bash** — identical result, better when the same turn also needs Bash for something else (seeding Supabase data, git, etc.) and switching tools mid-turn isn't worth it:
 ```bash
 xcodebuild -scheme Cinema -project Cinema.xcodeproj \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   -derivedDataPath /tmp/Cinema_build build
 ```
 
-**Install, launch, and screenshot:**
-```bash
-xcrun simctl list devices available          # get the device UDID
-xcrun simctl install <udid> /tmp/Cinema_build/Build/Products/Debug-iphonesimulator/Cinema.app
-xcrun simctl launch <udid> com.mtgcardneeder.Cinema
-xcrun simctl io <udid> screenshot /path/to/screenshot.png   # then Read the PNG to actually look at it
+### Installing, launching, and interacting — the simulator tool, as the default
+```
+control({action: "attach"})                                    # open the live panel — cheap, do it early
+control({action: "launch", app_path: "<.app path from a build above>"})   # installs + launches; replaces simctl install+launch
+control({action: "screenshot"})
+control({action: "tap", x, y})
+control({action: "text", text: "..."})                          # types into whatever field currently has focus
+control({action: "swipe", x, y, x2, y2, duration})
+control({action: "button", name: "HOME"})                       # background the app
 ```
 
-**Interacting with the app (tapping, typing) — use XCUITest, never screen-pixel automation.** A `CinemaUITests` UI-testing target already exists (`CinemaUITests/CinemaUITests.swift`). Driving the simulator via `osascript`/System Events by screenshotting the whole Mac screen and clicking computed pixel coordinates was tried first and failed repeatedly — window position drift, fragile coordinate math, one click even landed in an unrelated Mac app. XCUITest instead finds elements by accessibility label (`app.buttons["Sign In"].tap()`), which works regardless of window position or size. Add a test method per navigation step you need, then:
+**Coordinate gotcha — this will bite you if you skip it.** `tap`/`swipe`/`touch_path` all take device *points*, not the pixel dimensions of the screenshot image you're looking at (`attach` reports the exact point size, e.g. "402x874 points"). Compute the ratio once — `scale = point_width / screenshot_pixel_width` — and apply it to both x and y when reading a coordinate off a screenshot before tapping. Getting this wrong taps silently in the wrong place with no error; always re-screenshot immediately after a tap to confirm it actually landed where intended, don't chain multiple blind taps.
+
+**State persists between launches.** The simulator keeps the app's install and its Supabase session across relaunches, so there's normally no need to re-run any login flow — whatever account was last signed in (usually the seeded QA account, `qatest1@example.com` / `TestPass123`) is still signed in the next time you attach. Only sign in again if the simulator itself was erased.
+
+### When to still reach for XCUITest
+One real, confirmed gap: `touch_path` (the tool's smooth multi-point drag) did not reliably trigger the This-or-That screen's SwiftUI `DragGesture`-based swipe-to-pick, across several attempts with different start points, speeds, and durations — while XCUITest's `press(forDuration:thenDragTo:)` reliably does commit a pick the same way. `CinemaUITests/CinemaUITests.swift` stays in the project for exactly this category of check — a custom drag/gesture interaction the simulator tool's synthesized touch events don't seem to reach — not for navigation, taps, typing, or general verification, all of which the simulator tool now handles in a couple seconds instead of the old 60–90 second edit-test/rebuild/replay-from-login loop.
+
+If a gesture genuinely needs XCUITest, add a test method per navigation step, then:
 ```bash
 xcodebuild test -scheme Cinema -project Cinema.xcodeproj \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   -only-testing:CinemaUITests/CinemaUITests/<testName>
 ```
-Run it in the background piped to a log file, and take your `simctl` screenshot only once the log shows the specific action's line (e.g. `grep -q 'Tap "X" Button'`) — a blind `sleep N` either fires too early or (once) fired after the test had already torn down and the app was back on the home screen. There's a `pause(seconds:)` helper in the test file that keeps the app alive after the last action so there's a window to screenshot in.
+Run it in the background piped to a log file, and screenshot only once the log shows the specific action's line (e.g. `grep -q 'Tap "X" Button'`) — a blind `sleep N` either fires too early or (once) fired after the test had already torn down. There's a `pause(seconds:)` helper in the test file that keeps the app alive after the last action so there's a window to screenshot in. Use the `login()` helper against the seeded QA account rather than automating the full 12-step onboarding flow (live Contacts/Notifications system dialogs make it slow and flaky to script). Create additional seeded accounts via the Supabase REST API (below) when a fresh account is genuinely needed.
 
-For a logged-in state, use the `login()` helper against the seeded QA account (`qatest1@example.com` / `TestPass123`) rather than automating the full onboarding flow — the real onboarding has 12 steps including live Contacts/Notifications system permission dialogs, which is slow and flaky to script. Create additional seeded accounts via the Supabase REST API (above) when a fresh account is genuinely needed.
+Known gap: the main tab bar's buttons have no explicit `.accessibilityLabel()`, so XCUITest sees them by raw SF Symbol name (e.g. `"Numbered List"` instead of `"Lists"`). Worth a one-line fix next time that file is touched.
 
-Known gap: the main tab bar's buttons currently have no explicit `.accessibilityLabel()`, so XCUITest sees them by their raw SF Symbol name (e.g. `"Numbered List"` instead of something like `"Lists"`). Worth fixing with a one-line `.accessibilityLabel(...)` per tab item next time that file is touched — makes both testing and real accessibility better.
+### Physical device — unchanged, the simulator tool doesn't reach here
+The iOS Simulator tool is simulator-only. The paired physical device (Saahil Jain's iPhone) still goes through `xcrun devicectl`:
+```bash
+xcodebuild -scheme Cinema -project Cinema.xcodeproj \
+  -destination 'platform=iOS,name=Saahil Jain’s iPhone' \
+  -derivedDataPath /tmp/Cinema_build_device build
+xcrun devicectl device install app --device <udid> /tmp/Cinema_build_device/Build/Products/Debug-iphoneos/Cinema.app
+xcrun devicectl device process launch --device <udid> com.mtgcardneeder.Cinema
+```
+Always verify on the simulator first, then push the same build to the device — per the working agreement, device installs happen *after* every verified change, not instead of a simulator look. If launch fails with a "Locked" error, the install already succeeded — the device just needs unlocking; that's not a build problem.
+
+### Known gotcha: iOS Simulator tool usage once broke Documents access mid-session
+Using the simulator tool caused this session's shell to lose read/write access to the entire `~/Documents` folder (an interaction with macOS's `disclaimer` sandboxing wrapper — root cause not fully nailed down) until the chat session was restarted. If Bash/Read/Edit suddenly start failing with a bare "Operation not permitted" on project files after using the simulator tool, this is almost certainly it. Restarting the session fixed it; chasing System Settings → Privacy & Security did not (that was a wrong first guess — don't repeat it).
