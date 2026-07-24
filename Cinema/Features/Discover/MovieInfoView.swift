@@ -611,27 +611,29 @@ private struct CastCard: View {
 
 // MARK: - Provider Logo
 
+// A uniform card behind every logo, regardless of the source asset's own shape — TMDB serves a
+// mix of square app icons and wide wordmark/lockup images (e.g. "HBO Max on Prime Video" for a
+// channel subscription), and a bare .fit image with no background of its own reads as "some
+// logos are anchored, some are floating." The card fixes that; .fit (not .fill) keeps every
+// logo fully legible, including multi-brand lockups that would otherwise get cropped. No name
+// label underneath — a recognizable icon doesn't need a caption, and it's what a provider row
+// looks like on a home screen.
 private struct ProviderLogo: View {
     let provider: TMDBWatchProvider
     var body: some View {
-        VStack(spacing: 6) {
-            Group {
-                if let url = TMDBClient.shared.providerLogoURL(path: provider.logoPath) {
-                    AsyncImage(url: url) { phase in
-                        if case .success(let img) = phase { img.resizable().aspectRatio(contentMode: .fit) }
-                        else { Color.gray.opacity(0.3) }
-                    }
-                } else { Color.gray.opacity(0.3) }
+        Group {
+            if let url = TMDBClient.shared.providerLogoURL(path: provider.logoPath) {
+                AsyncImage(url: url) { phase in
+                    if case .success(let img) = phase {
+                        img.resizable().aspectRatio(contentMode: .fit).padding(6)
+                    } else { Color.clear }
+                }
             }
-            .frame(width: 44, height: 44)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-
-            Text(provider.providerName)
-                .font(.system(size: 10))
-                .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                .lineLimit(1)
-                .frame(width: 52)
         }
+        .frame(width: 52, height: 52)
+        .background(CinemaTheme.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
     }
 }
 
