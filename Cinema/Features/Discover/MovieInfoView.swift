@@ -461,8 +461,8 @@ struct MovieInfoView: View {
 
     @ViewBuilder
     private func whereToWatchSection(_ providers: TMDBRegionProviders) -> some View {
-        let streaming = providers.flatrate ?? []
-        let rentBuy = Array(Set((providers.rent ?? []) + (providers.buy ?? [])).prefix(5))
+        let streaming = dedupedByBaseProvider(providers.flatrate ?? [])
+        let rentBuy = orderedUnique((providers.rent ?? []) + (providers.buy ?? []))
 
         if !streaming.isEmpty || !rentBuy.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
@@ -500,6 +500,42 @@ struct MovieInfoView: View {
                     }
                 }
             }
+        }
+    }
+
+    // Preserves TMDB's own order — never route provider lists through a bare Set for display;
+    // Swift's Set/Dictionary iteration order is randomized per process launch (a security
+    // measure against hash-flooding), so `Set(...).prefix(n)` silently returns a different
+    // arbitrary subset every time the app runs. That looked like "providers disappearing" and
+    // was actually this bug, not stale or wrong API data.
+    private func orderedUnique(_ providers: [TMDBWatchProvider]) -> [TMDBWatchProvider] {
+        var seenIDs: Set<Int> = []
+        return providers.filter { seenIDs.insert($0.providerId).inserted }
+    }
+
+    // A "channel" entry (e.g. "HBO Max Amazon Channel") is the same underlying subscription as
+    // its base service, just billed and accessed through another platform — not different
+    // content. Collapse to one tile per base service, preferring the direct entry when both
+    // appear so the row doesn't show what looks like two unrelated options for one thing.
+    private func dedupedByBaseProvider(_ providers: [TMDBWatchProvider]) -> [TMDBWatchProvider] {
+        func baseName(_ name: String) -> String {
+            name.replacingOccurrences(of: " Amazon Channel", with: "")
+                .replacingOccurrences(of: " Roku Premium Channel", with: "")
+                .replacingOccurrences(of: " Apple TV Channel", with: "")
+                .replacingOccurrences(of: " Channel", with: "")
+        }
+        var chosen: [String: TMDBWatchProvider] = [:]
+        for provider in providers {
+            let base = baseName(provider.providerName)
+            if let existing = chosen[base], !existing.providerName.contains("Channel") { continue }
+            chosen[base] = provider
+        }
+        var addedBases: Set<String> = []
+        return providers.compactMap { provider in
+            let base = baseName(provider.providerName)
+            guard !addedBases.contains(base), let winner = chosen[base] else { return nil }
+            addedBases.insert(base)
+            return winner
         }
     }
 
