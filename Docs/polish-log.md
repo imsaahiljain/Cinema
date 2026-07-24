@@ -6,6 +6,9 @@ Whenever a change like this gets decided or built, add an entry here (newest on 
 
 ---
 
+**2026-07-24 — Where to Watch logos get a real app-icon treatment**
+Provider logos used to be a bare `.fit` image with no background of its own and a name caption underneath that truncated on anything longer than a few characters ("HBO Ma…", "YouTube…") — looked unfinished, especially since TMDB mixes square app icons with wide wordmark logos in the same row. Fixed with a uniform surface-color card behind every logo (so a transparent wordmark and an opaque icon read as one deliberate set) and dropped the caption entirely — a recognizable icon doesn't need one. Verified against the trickiest real case: Dune: Part Two's "HBO Max on Prime Video" entry (a genuine, TMDB-provided two-brand lockup for watching HBO Max as a Prime Video channel add-on) stays fully legible instead of getting cropped, because the fix kept `.fit` rather than switching to `.fill`.
+
 **2026-07-23 — Cast & Crew stays Director-only, "In Theaters Now" chip is a live TMDB signal**
 First pass expanded Cast & Crew to Director/Writer/Producer/Director of Photography/Composer/Editor — reverted per direct feedback: Popcorn is a social ranking app, not a film-credits database, and shouldn't drift toward Letterboxd/IMDb territory. Director is the one crew role an average moviegoer actually recognizes and treats as a signal ("a Nolan film"); the rest is industry-recognition trivia nobody's deciding to watch something over. Cast & Crew is back to Director + main cast, nothing else. Also swapped the "In Theaters Now" chip's logic from a fixed 45-day release-date heuristic to a live check against TMDB's actual `now_playing` list, fetched fresh every time the screen opens — so a film that's left theaters and picked up streaming/rental providers a few weeks later updates on its own, rather than staying frozen on stale "in theaters" info.
 
