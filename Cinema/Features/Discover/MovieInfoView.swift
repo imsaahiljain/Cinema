@@ -29,6 +29,8 @@ final class MovieInfoViewModel {
     var trailerKey: String?
     var director: TMDBPerson?
     var contentRating: String?
+    var tagline: String?
+    var collectionName: String?
     var isInTheaters = false
     var friendTakes: [FriendTake] = []
     var isLoading = false
@@ -53,6 +55,7 @@ final class MovieInfoViewModel {
         }
         trailerKey = await TMDBClient.shared.trailerKey(tmdbID: film.id, mediaType: film.mediaType)
         contentRating = await TMDBClient.shared.contentRating(tmdbID: film.id, mediaType: film.mediaType)
+        (tagline, collectionName) = await TMDBClient.shared.extras(tmdbID: film.id, mediaType: film.mediaType)
 
         if let uid = currentUserID {
             async let takes = loadFriendTakes(tmdbID: film.id, mediaType: film.mediaType, currentUserID: uid)
@@ -235,6 +238,14 @@ struct MovieInfoView: View {
                     .foregroundStyle(CinemaTheme.Colors.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
 
+                if let tagline = vm.tagline {
+                    Text(tagline)
+                        .font(.system(size: 13.5))
+                        .italic()
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.75))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 HStack(spacing: 8) {
                     if let rating = vm.contentRating {
                         Text(rating)
@@ -314,6 +325,12 @@ struct MovieInfoView: View {
             // Cast & Crew — always last
             if vm.director != nil || !(vm.credits?.cast.isEmpty ?? true) {
                 castAndCrewSection
+            }
+
+            if let collectionName = vm.collectionName {
+                Text("Part of the \(collectionName)")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.7))
             }
         }
         .padding(.horizontal, CinemaTheme.Spacing.lg)

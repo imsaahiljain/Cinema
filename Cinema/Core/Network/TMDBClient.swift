@@ -164,6 +164,16 @@ struct TMDBClient {
         }
     }
 
+    /// Tagline + franchise/collection name, both only present on the full detail endpoint
+    /// (search/discover results never carry them). Collection is movie-only — TV has no
+    /// equivalent grouping in TMDB's model.
+    func extras(tmdbID: Int, mediaType: MediaType) async -> (tagline: String?, collectionName: String?) {
+        let path = mediaType == .movie ? "movie/\(tmdbID)" : "tv/\(tmdbID)"
+        guard let result: TMDBExtrasResult = try? await fetch(baseURL.appending(path: path)) else { return (nil, nil) }
+        let tagline = (result.tagline?.isEmpty ?? true) ? nil : result.tagline
+        return (tagline, result.belongsToCollection?.name)
+    }
+
     func trailerKey(tmdbID: Int, mediaType: MediaType) async -> String? {
         let path = mediaType == .movie ? "movie/\(tmdbID)/videos" : "tv/\(tmdbID)/videos"
         guard let response: TMDBVideoResponse = try? await fetch(baseURL.appending(path: path)) else { return nil }
@@ -260,6 +270,9 @@ struct TMDBReleaseDateEntry: Decodable { let certification: String }
 
 struct TMDBContentRatingsResponse: Decodable { let results: [TMDBContentRatingCountry] }
 struct TMDBContentRatingCountry: Decodable { let iso31661: String; let rating: String }
+
+struct TMDBExtrasResult: Decodable { let tagline: String?; let belongsToCollection: TMDBCollectionRef? }
+struct TMDBCollectionRef: Decodable { let name: String }
 
 struct TMDBVideoResponse: Decodable { let results: [TMDBVideo] }
 
