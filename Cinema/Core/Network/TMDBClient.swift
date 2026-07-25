@@ -164,14 +164,20 @@ struct TMDBClient {
         }
     }
 
-    /// Tagline + franchise/collection name, both only present on the full detail endpoint
-    /// (search/discover results never carry them). Collection is movie-only — TV has no
-    /// equivalent grouping in TMDB's model.
-    func extras(tmdbID: Int, mediaType: MediaType) async -> (tagline: String?, collectionName: String?) {
+    /// Tagline, franchise/collection name, and (TV only) creators — all only present on the full
+    /// detail endpoint (search/discover results never carry them). Collection is movie-only; TV
+    /// has no equivalent grouping in TMDB's model, so `belongsToCollection` just decodes absent.
+    /// Creators are the TV-only equivalent of "the one name behind this" — TMDB's TV credits
+    /// endpoint almost never has a "Director" job (that's an episode-level credit, not a
+    /// show-level one), so the real answer to "who made this" lives in `created_by` here instead.
+    func extras(tmdbID: Int, mediaType: MediaType) async -> (tagline: String?, collectionName: String?, creators: [TMDBPerson]) {
         let path = mediaType == .movie ? "movie/\(tmdbID)" : "tv/\(tmdbID)"
-        guard let result: TMDBExtrasResult = try? await fetch(baseURL.appending(path: path)) else { return (nil, nil) }
+        guard let result: TMDBExtrasResult = try? await fetch(baseURL.appending(path: path)) else { return (nil, nil, []) }
         let tagline = (result.tagline?.isEmpty ?? true) ? nil : result.tagline
-        return (tagline, result.belongsToCollection?.name)
+        let creators = (result.createdBy ?? []).map {
+            TMDBPerson(id: $0.id, name: $0.name, job: "Creator", character: nil, profilePath: $0.profilePath, order: nil)
+        }
+        return (tagline, result.belongsToCollection?.name, creators)
     }
 
     func trailerKey(tmdbID: Int, mediaType: MediaType) async -> String? {
@@ -271,8 +277,9 @@ struct TMDBReleaseDateEntry: Decodable { let certification: String }
 struct TMDBContentRatingsResponse: Decodable { let results: [TMDBContentRatingCountry] }
 struct TMDBContentRatingCountry: Decodable { let iso31661: String; let rating: String }
 
-struct TMDBExtrasResult: Decodable { let tagline: String?; let belongsToCollection: TMDBCollectionRef? }
+struct TMDBExtrasResult: Decodable { let tagline: String?; let belongsToCollection: TMDBCollectionRef?; let createdBy: [TMDBCreatedBy]? }
 struct TMDBCollectionRef: Decodable { let name: String }
+struct TMDBCreatedBy: Decodable { let id: Int; let name: String; let profilePath: String? }
 
 struct TMDBVideoResponse: Decodable { let results: [TMDBVideo] }
 

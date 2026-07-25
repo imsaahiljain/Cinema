@@ -28,6 +28,7 @@ final class MovieInfoViewModel {
     var watchProviders: TMDBRegionProviders?
     var trailerKey: String?
     var director: TMDBPerson?
+    var creators: [TMDBPerson] = []
     var contentRating: String?
     var tagline: String?
     var collectionName: String?
@@ -55,7 +56,7 @@ final class MovieInfoViewModel {
         }
         trailerKey = await TMDBClient.shared.trailerKey(tmdbID: film.id, mediaType: film.mediaType)
         contentRating = await TMDBClient.shared.contentRating(tmdbID: film.id, mediaType: film.mediaType)
-        (tagline, collectionName) = await TMDBClient.shared.extras(tmdbID: film.id, mediaType: film.mediaType)
+        (tagline, collectionName, creators) = await TMDBClient.shared.extras(tmdbID: film.id, mediaType: film.mediaType)
 
         if let uid = currentUserID {
             async let takes = loadFriendTakes(tmdbID: film.id, mediaType: film.mediaType, currentUserID: uid)
@@ -70,10 +71,14 @@ final class MovieInfoViewModel {
 
         var takes: [FriendTake] = []
 
-        // "Or you" — the current user's own take shows first, if they've ranked it.
+        // "Or you" — the current user's own take shows first, if they've ranked it. Movie and
+        // TV IDs are independent numbering spaces on TMDB (a movie #100 and a show #100 are
+        // unrelated titles), so media_type has to be part of the match or this silently mixes
+        // up two different titles once TV is enabled.
         if let mine: RankedItem = try? await SupabaseClient.shared
             .from("ranked_items").select()
-            .eq("tmdb_id", value: tmdbID).eq("user_id", value: currentUserID)
+            .eq("tmdb_id", value: tmdbID).eq("media_type", value: mediaType.rawValue)
+            .eq("user_id", value: currentUserID)
             .single().execute().value {
             let allMine: [JustID] = (try? await SupabaseClient.shared
                 .from("ranked_items").select("id").eq("user_id", value: currentUserID)
@@ -95,7 +100,7 @@ final class MovieInfoViewModel {
         let ids = edges.map(\.followingID)
         guard let items: [RankedItem] = try? await SupabaseClient.shared
             .from("ranked_items").select()
-            .eq("tmdb_id", value: tmdbID)
+            .eq("tmdb_id", value: tmdbID).eq("media_type", value: mediaType.rawValue)
             .in("user_id", values: ids.map(\.uuidString))
             .execute().value, !items.isEmpty else { return takes }
 
@@ -323,7 +328,7 @@ struct MovieInfoView: View {
             noteSection
 
             // Cast & Crew — always last
-            if vm.director != nil || !(vm.credits?.cast.isEmpty ?? true) {
+            if vm.director != nil || !vm.creators.isEmpty || !(vm.credits?.cast.isEmpty ?? true) {
                 castAndCrewSection
             }
 
@@ -344,13 +349,17 @@ struct MovieInfoView: View {
     // average moviegoer actually recognizes and treats as a signal ("a Nolan film"); everyone
     // else in the credits is industry-recognition territory, not a reason someone picks a
     // movie. Keep this section to Director + the main cast, nothing more.
+    //
+    // TV has no real "Director" credit at the show level (that's an episode-level job, and
+    // TMDB's aggregate TV credits almost never surface it) — the equivalent recognizable name
+    // is the show's creator(s) (`vm.creators`, e.g. "Vince Gilligan" for Breaking Bad), so those
+    // lead the row for TV instead. Both share the same card treatment either way.
 
     private var castAndCrewSection: some View {
-        // Director rendered as the same photo/name/role card as everyone else in Cast —
-        // one consistent visual language for "people in this movie" instead of singling
-        // the director out as a plain text line.
-        let castSlots = vm.director == nil ? 12 : 11
-        let people = ([vm.director].compactMap { $0 }) + Array((vm.credits?.cast ?? []).prefix(castSlots))
+        let leads = vm.director.map { [$0] } ?? vm.creators
+        let castSlots = max(12 - leads.count, 0)
+        let people = leads + Array((vm.credits?.cast ?? []).prefix(castSlots))
+        let leadIDs = Set(leads.map(\.id))
 
         return VStack(alignment: .leading, spacing: 14) {
             SectionLabel("Cast & Crew")
@@ -359,7 +368,7 @@ struct MovieInfoView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 16) {
                         ForEach(people) { person in
-                            CastCard(person: person, roleOverride: person.id == vm.director?.id ? "Director" : nil)
+                            CastCard(person: person, roleOverride: leadIDs.contains(person.id) ? person.job : nil)
                         }
                     }
                 }
