@@ -8,6 +8,7 @@ import Supabase
 final class DiscoverViewModel {
     var top10: [MediaItem] = []
     var newReleases: [MediaItem] = []
+    var mostAnticipated: [MediaItem] = []
     var followingCount: Int = 0
     var friendActivity: [MediaItem] = []
     var highlyRated: [MediaItem] = []
@@ -18,7 +19,8 @@ final class DiscoverViewModel {
     func load(currentUserID: UUID?) async {
         isLoading = top10.isEmpty
         top10 = (try? await TMDBClient.shared.trending(mediaType: "movie")) ?? []
-        newReleases = (try? await TMDBClient.shared.nowPlaying()) ?? []
+        newReleases = (try? await TMDBClient.shared.newReleases()) ?? []
+        mostAnticipated = (try? await TMDBClient.shared.mostAnticipated()) ?? []
         isLoading = false
 
         // Social
@@ -117,6 +119,11 @@ struct DiscoverView: View {
                         // New Releases
                         if !vm.newReleases.isEmpty {
                             MediaRow(title: "New Releases", films: vm.newReleases) { selectedFilm = $0 }
+                        }
+
+                        // Most Anticipated
+                        if !vm.mostAnticipated.isEmpty {
+                            MediaRow(title: "Most Anticipated", films: vm.mostAnticipated) { selectedFilm = $0 }
                         }
 
                         // Friends (gated at 20 following)

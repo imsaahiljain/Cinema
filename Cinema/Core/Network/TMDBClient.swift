@@ -28,11 +28,59 @@ struct TMDBClient {
 
     /// TMDB's own `now_playing` window leaks a few days into the future (regional release-date
     /// aggregation), so it isn't a reliable "already out" guarantee on its own — same `isUpcoming`
-    /// filter as `trending()` above, for the same reason.
+    /// filter as `trending()` above, for the same reason. Kept around for the "In Theaters Now"
+    /// chip membership check in `MovieInfoView` — `newReleases()` below is the Discover row.
     func nowPlaying() async throws -> [MediaItem] {
         let url = baseURL.appending(path: "movie/now_playing")
         let results: TMDBSearchResponse = try await fetch(url)
         return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }.filter { !$0.isUpcoming }
+    }
+
+    private static let isoDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.calendar = Calendar(identifier: .gregorian)
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f
+    }()
+
+    /// Discover's "New Releases" row. `now_playing` sorts by popularity within its window, which
+    /// is exactly why it kept converging with `trending()` above (same sort axis, overlapping
+    /// window) — this sorts by release date instead, so it surfaces genuinely new titles nobody's
+    /// talking about yet rather than reshowing whatever's already popular. Same 45-day window as
+    /// `MediaItem.isRecentRelease`'s "New" tag, `region` as a light relevance floor so a US
+    /// audience doesn't see festival-only/foreign-only releases with no US date at all.
+    func newReleases() async throws -> [MediaItem] {
+        let today = Date()
+        let cutoff = Calendar.current.date(byAdding: .day, value: -45, to: today) ?? today
+        let url = baseURL
+            .appending(path: "discover/movie")
+            .appending(queryItems: [
+                .init(name: "sort_by", value: "primary_release_date.desc"),
+                .init(name: "primary_release_date.gte", value: Self.isoDateFormatter.string(from: cutoff)),
+                .init(name: "primary_release_date.lte", value: Self.isoDateFormatter.string(from: today)),
+                .init(name: "region", value: "US"),
+                .init(name: "vote_count.gte", value: "5")
+            ])
+        let results: TMDBSearchResponse = try await fetch(url)
+        return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }.filter { !$0.isUpcoming }
+    }
+
+    /// Discover's "Most Anticipated" row — the flip side of the `isUpcoming` filter above. That
+    /// filter was correctly keeping unreleased movies out of "right now" rows, but the anticipation
+    /// signal itself (a movie can genuinely be the most-searched thing in the country a week before
+    /// release) is real and was just being thrown away. This row is where it belongs: sorted by
+    /// popularity so real hype (not just anything with a future date) rises to the top.
+    func mostAnticipated() async throws -> [MediaItem] {
+        let today = Self.isoDateFormatter.string(from: Date())
+        let url = baseURL
+            .appending(path: "discover/movie")
+            .appending(queryItems: [
+                .init(name: "sort_by", value: "popularity.desc"),
+                .init(name: "primary_release_date.gte", value: today)
+            ])
+        let results: TMDBSearchResponse = try await fetch(url)
+        return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }.filter { $0.isUpcoming }
     }
 
     /// Movie-only unless `SearchConfig.includeTVShows` is on, in which case genres with a TV
