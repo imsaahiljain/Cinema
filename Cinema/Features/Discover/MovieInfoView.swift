@@ -29,6 +29,7 @@ final class MovieInfoViewModel {
     var trailerKey: String?
     var director: TMDBPerson?
     var creators: [TMDBPerson] = []
+    var bookAuthors: [TMDBPerson] = []
     var contentRating: String?
     var tagline: String?
     var collectionName: String?
@@ -47,6 +48,16 @@ final class MovieInfoViewModel {
 
         credits = try? await TMDBClient.shared.credits(tmdbID: film.id, mediaType: film.mediaType)
         director = credits?.crew.first(where: { $0.job == "Director" })
+        // TMDB credits the source material under two different job titles depending on whether
+        // it's fiction or non-fiction — "Novel" (e.g. Andy Weir for Project Hail Mary, Frank
+        // Herbert for Dune) vs "Book" (e.g. the Oppenheimer biography's authors). Both mean the
+        // same thing to a viewer, so both get folded into one "Author" role. Naturally empty for
+        // anything with an original screenplay — no special-casing needed.
+        var seenAuthorIDs = Set<Int>()
+        bookAuthors = (credits?.crew ?? [])
+            .filter { $0.job == "Novel" || $0.job == "Book" }
+            .filter { seenAuthorIDs.insert($0.id).inserted }
+            .map { TMDBPerson(id: $0.id, name: $0.name, job: "Author", character: nil, profilePath: $0.profilePath, order: nil) }
         watchProviders = try? await TMDBClient.shared.watchProviders(tmdbID: film.id, mediaType: film.mediaType)
         // TMDB's own "now playing" list, fetched fresh every time this screen opens — not a
         // fixed release-date heuristic, so the "In Theaters Now" chip stops showing itself the
@@ -328,7 +339,7 @@ struct MovieInfoView: View {
             noteSection
 
             // Cast & Crew — always last
-            if vm.director != nil || !vm.creators.isEmpty || !(vm.credits?.cast.isEmpty ?? true) {
+            if vm.director != nil || !vm.bookAuthors.isEmpty || !vm.creators.isEmpty || !(vm.credits?.cast.isEmpty ?? true) {
                 castAndCrewSection
             }
 
@@ -350,13 +361,15 @@ struct MovieInfoView: View {
     // else in the credits is industry-recognition territory, not a reason someone picks a
     // movie. Keep this section to Director + the main cast, nothing more.
     //
-    // TV has no real "Director" credit at the show level (that's an episode-level job, and
-    // TMDB's aggregate TV credits almost never surface it) — the equivalent recognizable name
-    // is the show's creator(s) (`vm.creators`, e.g. "Vince Gilligan" for Breaking Bad), so those
-    // lead the row for TV instead. Both share the same card treatment either way.
+    // Two deliberate exceptions, both because they're a real, recognizable draw the same way a
+    // director is: the source-material author for a book adaptation (`vm.bookAuthors`, e.g. "an
+    // Andy Weir book" carries real weight for his readers), and — for TV, which has no real
+    // "Director" credit at the show level (directing is an episode-level job there, and TMDB's
+    // aggregate TV credits almost never surface a show-level one) — the show's creator(s)
+    // (`vm.creators`, e.g. "Vince Gilligan" for Breaking Bad). All share the same card treatment.
 
     private var castAndCrewSection: some View {
-        let leads = vm.director.map { [$0] } ?? vm.creators
+        let leads = film.mediaType == .tv ? vm.creators : ([vm.director].compactMap { $0 } + vm.bookAuthors)
         let castSlots = max(12 - leads.count, 0)
         let people = leads + Array((vm.credits?.cast ?? []).prefix(castSlots))
         let leadIDs = Set(leads.map(\.id))
