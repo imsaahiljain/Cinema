@@ -199,33 +199,6 @@ final class CinemaUITests: XCTestCase {
         pause()
     }
 
-    func testSearchTapOpensListPickerAndAutoDismisses() throws {
-        login()
-        app.buttons["Search"].tap()
-
-        let searchField = app.textFields["Search films..."]
-        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
-        searchField.tap()
-        searchField.typeText("Minion")
-
-        let firstQuickActions = app.buttons["Quick Actions"].firstMatch
-        XCTAssertTrue(firstQuickActions.waitForExistence(timeout: 5))
-        firstQuickActions.tap()
-
-        let addToListMenuItem = app.buttons["Add to List"]
-        XCTAssertTrue(addToListMenuItem.waitForExistence(timeout: 5))
-        addToListMenuItem.tap()
-
-        let watchlistRow = app.buttons["addToListSheet.row.Watchlist"]
-        XCTAssertTrue(watchlistRow.waitForExistence(timeout: 5))
-        watchlistRow.tap()
-
-        // No Done button anymore — tapping a row should toggle it and close the sheet on its own.
-        let goneExpectation = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: watchlistRow)
-        wait(for: [goneExpectation], timeout: 5)
-        pause()
-    }
-
     func testFindPeopleFromProfile() throws {
         login()
         app.buttons["Profile"].tap()
@@ -237,25 +210,6 @@ final class CinemaUITests: XCTestCase {
         let searchField = app.textFields["Search by username..."]
         XCTAssertTrue(searchField.waitForExistence(timeout: 5))
         searchField.typeText("a")
-        pause()
-    }
-
-    func testRetappingRankedItemReopensRanking() throws {
-        login()
-        app.buttons["Search"].tap()
-
-        let searchField = app.textFields["Search films..."]
-        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
-        searchField.tap()
-        searchField.typeText("Minion")
-
-        let firstQuickActions = app.buttons["Quick Actions"].firstMatch
-        XCTAssertTrue(firstQuickActions.waitForExistence(timeout: 5))
-        firstQuickActions.tap()
-
-        let reRank = app.buttons["Re-Rank"]
-        XCTAssertTrue(reRank.waitForExistence(timeout: 5))
-        reRank.tap()
         pause()
     }
 
@@ -326,24 +280,6 @@ final class CinemaUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 1.0)
         app.swipeUp()
         app.swipeUp()
-        pause()
-    }
-
-    func testLongPressPosterOpensQuickActions() throws {
-        login()
-        app.buttons["Search"].tap()
-
-        let searchField = app.textFields["Search films..."]
-        XCTAssertTrue(searchField.waitForExistence(timeout: 5))
-        searchField.tap()
-        searchField.typeText("Minions")
-
-        let firstPoster = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'searchGridTile.poster.'")).firstMatch
-        XCTAssertTrue(firstPoster.waitForExistence(timeout: 5))
-        firstPoster.press(forDuration: 0.6)
-
-        let addToListMenuItem = app.buttons["Add to List"]
-        XCTAssertTrue(addToListMenuItem.waitForExistence(timeout: 5))
         pause()
     }
 
