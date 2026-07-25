@@ -12,20 +12,9 @@ final class DiscoverViewModel {
     var friendActivity: [MediaItem] = []
     var criticallyAcclaimed: [MediaItem] = []
     var awardWinners: [MediaItem] = []
-    var genreRows: [(id: Int, title: String, films: [MediaItem])] = []
     var platformRows: [(title: String, films: [MediaItem])] = []
-    var watchlistFilms: [MediaItem] = []
     var recommendations: [MediaItem] = []
     var isLoading = false
-
-    private var likedGenreIDs: [Int] {
-        UserDefaults.standard.string(forKey: "cinema_liked_genres")?
-            .split(separator: ",").compactMap { Int($0) } ?? [18, 28, 878]
-    }
-    private var dislikedGenreIDs: [Int] {
-        UserDefaults.standard.string(forKey: "cinema_disliked_genres")?
-            .split(separator: ",").compactMap { Int($0) } ?? []
-    }
 
     func load(currentUserID: UUID?) async {
         isLoading = top10.isEmpty
@@ -41,17 +30,6 @@ final class DiscoverViewModel {
         // Editorial
         criticallyAcclaimed = (try? await TMDBClient.shared.criticallyAcclaimed()) ?? []
         awardWinners = (try? await TMDBClient.shared.awardWinners()) ?? []
-
-        // Liked-genre rows (skip disliked)
-        let liked = likedGenreIDs.filter { !dislikedGenreIDs.contains($0) }
-        var rows: [(id: Int, title: String, films: [MediaItem])] = []
-        for gid in liked {
-            if let films = try? await TMDBClient.shared.discover(genreID: gid), !films.isEmpty {
-                let name = MediaItem.genreMap[gid] ?? "Genre"
-                rows.append((gid, "Trending in \(name)", films))
-            }
-        }
-        genreRows = rows
 
         // Platform rows
         let platforms: [(String, Int)] = [("On Netflix", 8), ("On Prime Video", 9), ("On Apple TV+", 350)]
@@ -100,22 +78,6 @@ final class DiscoverViewModel {
     }
 
     private func loadPersonal(userID: UUID) async {
-        // Watchlist
-        struct WatchlistRow: Decodable {
-            let tmdbID: Int; let mediaType: String
-            enum CodingKeys: String, CodingKey { case tmdbID = "tmdb_id"; case mediaType = "media_type" }
-        }
-        if let rows: [WatchlistRow] = try? await SupabaseClient.shared
-            .from("watchlist").select().eq("user_id", value: userID)
-            .order("added_at", ascending: false).limit(20).execute().value {
-            var wl: [MediaItem] = []
-            for row in rows {
-                let type = MediaType(rawValue: row.mediaType) ?? .movie
-                if let m = try? await TMDBClient.shared.details(tmdbID: row.tmdbID, mediaType: type) { wl.append(m) }
-            }
-            watchlistFilms = wl
-        }
-
         // Top-rated film → recommendations
         if let topItem: [RankedItem] = try? await SupabaseClient.shared
             .from("ranked_items").select().eq("user_id", value: userID)
@@ -177,19 +139,9 @@ struct DiscoverView: View {
                             MediaRow(title: "Award Winners", films: vm.awardWinners) { selectedFilm = $0 }
                         }
 
-                        // Genre rows
-                        ForEach(Array(vm.genreRows.enumerated()), id: \.offset) { _, row in
-                            MediaRow(title: row.title, films: row.films) { selectedFilm = $0 }
-                        }
-
                         // Platform rows
                         ForEach(Array(vm.platformRows.enumerated()), id: \.offset) { _, row in
                             MediaRow(title: row.title, films: row.films) { selectedFilm = $0 }
-                        }
-
-                        // Watchlist
-                        if !vm.watchlistFilms.isEmpty {
-                            MediaRow(title: "Your Watchlist", films: vm.watchlistFilms) { selectedFilm = $0 }
                         }
 
                         Spacer().frame(height: 80)

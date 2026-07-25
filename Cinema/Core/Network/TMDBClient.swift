@@ -16,16 +16,23 @@ struct TMDBClient {
 
     // MARK: - Discovery
 
+    /// TMDB's trending index counts anticipation (searches/page views) starting the moment a
+    /// title is announced, years before release — so an unreleased movie can outrank things
+    /// people can actually watch tonight. Filtered out here since "trending" should never
+    /// surface something you can't watch yet, in Discover's Top 10 or Search's Trending row.
     func trending(mediaType: String = "all", timeWindow: String = "week") async throws -> [MediaItem] {
         let url = baseURL.appending(path: "trending/\(mediaType)/\(timeWindow)")
         let results: TMDBSearchResponse = try await fetch(url)
-        return results.results.compactMap { MediaItem(from: $0) }
+        return results.results.compactMap { MediaItem(from: $0) }.filter { !$0.isUpcoming }
     }
 
+    /// TMDB's own `now_playing` window leaks a few days into the future (regional release-date
+    /// aggregation), so it isn't a reliable "already out" guarantee on its own — same `isUpcoming`
+    /// filter as `trending()` above, for the same reason.
     func nowPlaying() async throws -> [MediaItem] {
         let url = baseURL.appending(path: "movie/now_playing")
         let results: TMDBSearchResponse = try await fetch(url)
-        return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }
+        return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }.filter { !$0.isUpcoming }
     }
 
     /// Movie-only unless `SearchConfig.includeTVShows` is on, in which case genres with a TV
@@ -62,11 +69,14 @@ struct TMDBClient {
         return results.results.compactMap { MediaItem(from: $0, forcedType: .tv) }
     }
 
+    /// Filtered to a high vote-average floor, then ordered by popularity rather than rating —
+    /// sorting by rating alone surfaces obscure well-reviewed titles nobody recognizes ahead of
+    /// acclaimed movies people have actually heard of.
     func criticallyAcclaimed() async throws -> [MediaItem] {
         let url = baseURL
             .appending(path: "discover/movie")
             .appending(queryItems: [
-                .init(name: "sort_by", value: "vote_average.desc"),
+                .init(name: "sort_by", value: "popularity.desc"),
                 .init(name: "vote_count.gte", value: "1000"),
                 .init(name: "vote_average.gte", value: "8.0")
             ])
@@ -74,11 +84,13 @@ struct TMDBClient {
         return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }
     }
 
+    /// Same recognizability issue as `criticallyAcclaimed()` — ordered by popularity within the
+    /// high vote-count/vote-average floor instead of by raw vote count.
     func awardWinners() async throws -> [MediaItem] {
         let url = baseURL
             .appending(path: "discover/movie")
             .appending(queryItems: [
-                .init(name: "sort_by", value: "vote_count.desc"),
+                .init(name: "sort_by", value: "popularity.desc"),
                 .init(name: "vote_count.gte", value: "2000"),
                 .init(name: "vote_average.gte", value: "8.0")
             ])
