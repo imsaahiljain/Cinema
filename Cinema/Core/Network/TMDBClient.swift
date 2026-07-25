@@ -136,6 +136,34 @@ struct TMDBClient {
         return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }
     }
 
+    /// Search's idle browse used to default to trending() — the exact same call Discover's Top 10
+    /// row already makes, so the two screens showed the same movies. This claims the one axis
+    /// none of Discover's rows use: solid reviews (7.0+) that never crossed into "1000+ votes
+    /// mainstream" (highlyRated's floor) — genuinely well-liked titles that aren't already the
+    /// obvious, most-talked-about picks. vote_count.lte keeps it from re-converging with
+    /// highlyRated at the top end; vote_count.gte keeps actual junk out at the bottom end.
+    ///
+    /// First version sorted by vote_average.desc, which surfaces whatever a tiny, passionate
+    /// audience rated 9-10 — in practice that meant explicit content and K-pop concert films,
+    /// not "good movies." Sorting by popularity.desc instead (same pattern as highlyRated) picks
+    /// the most-known title *within* the quality band, not the most obscure outlier; excluding
+    /// Documentary/Music genres keeps concert films out; include_adult=false matches every other
+    /// query in this file; the vote floor moved up from 100 to 300 for more reliable signal.
+    func hiddenGems() async throws -> [MediaItem] {
+        let url = baseURL
+            .appending(path: "discover/movie")
+            .appending(queryItems: [
+                .init(name: "sort_by", value: "popularity.desc"),
+                .init(name: "vote_average.gte", value: "7.0"),
+                .init(name: "vote_count.gte", value: "300"),
+                .init(name: "vote_count.lte", value: "999"),
+                .init(name: "without_genres", value: "99,10402"),
+                .init(name: "include_adult", value: "false")
+            ])
+        let results: TMDBSearchResponse = try await fetch(url)
+        return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }
+    }
+
     func byPlatform(providerID: Int) async throws -> [MediaItem] {
         let url = baseURL
             .appending(path: "discover/movie")

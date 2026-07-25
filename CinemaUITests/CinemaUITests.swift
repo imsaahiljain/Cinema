@@ -121,6 +121,12 @@ final class CinemaUITests: XCTestCase {
         pause()
     }
 
+    func testSearchIdleShowsHiddenGems() throws {
+        login()
+        app.buttons["Search"].tap()
+        pause()
+    }
+
     func testSearchMovieOnly() throws {
         login()
         app.buttons["Search"].tap()

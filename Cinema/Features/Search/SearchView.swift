@@ -8,7 +8,7 @@ import Supabase
 final class SearchViewModel {
     var query = ""
     var results: [MediaItem] = []
-    var trending: [MediaItem] = []
+    var hiddenGems: [MediaItem] = []
     var isSearching = false
     var addedIDs: Set<Int> = []
     var watchlistIDs: Set<Int> = []
@@ -60,10 +60,14 @@ final class SearchViewModel {
         isBrowsingGenre = false
     }
 
-    func loadTrending() async {
-        guard trending.isEmpty else { return }
+    // Was trending() — the exact call Discover's Top 10 row already makes, so Search's idle
+    // browse just re-showed whatever Discover already showed. hiddenGems() is TMDBClient's own
+    // axis: solid reviews that never crossed into Discover's "highlyRated" mainstream floor.
+    // Movie-only for now, matching SearchConfig.includeTVShows being off app-wide.
+    func loadHiddenGems() async {
+        guard hiddenGems.isEmpty else { return }
         do {
-            trending = try await TMDBClient.shared.trending(mediaType: SearchConfig.includeTVShows ? "all" : "movie")
+            hiddenGems = try await TMDBClient.shared.hiddenGems()
         } catch {}
     }
 
@@ -109,8 +113,8 @@ struct SearchView: View {
     @State private var addToListItem: MediaItem?
 
     private var sectionTitle: String {
-        guard let id = vm.selectedGenreID else { return "Trending" }
-        return vm.quickGenres.first { $0.id == id }?.name ?? "Trending"
+        guard let id = vm.selectedGenreID else { return "Hidden Gems" }
+        return vm.quickGenres.first { $0.id == id }?.name ?? "Hidden Gems"
     }
 
     var body: some View {
@@ -139,7 +143,7 @@ struct SearchView: View {
             }
         }
         .task {
-            await vm.loadTrending()
+            await vm.loadHiddenGems()
             await vm.loadUserLists(userID: appState.currentUser?.id)
         }
         .sheet(item: $selectedFilm) { MovieInfoView(film: $0) }
@@ -232,7 +236,7 @@ struct SearchView: View {
                     }
                     .padding(.vertical, 60)
                 } else {
-                    posterGrid(vm.selectedGenreID != nil ? vm.genreResults : vm.trending)
+                    posterGrid(vm.selectedGenreID != nil ? vm.genreResults : vm.hiddenGems)
                 }
 
                 Spacer().frame(height: 100)
