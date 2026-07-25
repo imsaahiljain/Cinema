@@ -160,6 +160,17 @@ final class MovieInfoViewModel {
             savedNote = noteDraft
         } catch {}
     }
+
+    // Same default score / upsert shape as ListsViewModel.rankFilm — a film enters ranking at a
+    // neutral 1500 and the battles do the rest. Only ever called when the film isn't ranked yet
+    // (callers check `isRanked` first), so this never resets an existing real score.
+    func rankFilm(tmdbID: Int, mediaType: MediaType, userID: UUID?) async {
+        guard let userID else { return }
+        try? await SupabaseClient.shared.from("ranked_items")
+            .upsert(["user_id": userID.uuidString, "tmdb_id": String(tmdbID),
+                     "media_type": mediaType.rawValue, "elo_score": String(1500.0)])
+            .execute()
+    }
 }
 
 // MARK: - MovieInfoView
@@ -168,8 +179,15 @@ struct MovieInfoView: View {
     let film: MediaItem
     @State private var vm = MovieInfoViewModel()
     @State private var selectedFriend: CinemaUser?
+    @State private var showActions = false
+    @State private var showAddToList = false
+    @State private var showRanking = false
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+
+    // Reuses the exact "You" signal Friends' Takes already computes from a real ranked_items
+    // row — no separate state to track or fall out of sync with the rest of the screen.
+    private var isRanked: Bool { vm.friendTakes.contains(where: \.isSelf) }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -183,19 +201,89 @@ struct MovieInfoView: View {
                 }
             }
 
-            Button { dismiss() } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 30))
-                    .foregroundStyle(Color.white.opacity(0.85))
-                    .shadow(color: .black.opacity(0.5), radius: 4)
+            HStack(spacing: 14) {
+                Button { showActions = true } label: {
+                    Image(systemName: "ellipsis.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundStyle(Color.white.opacity(0.85))
+                        .shadow(color: .black.opacity(0.5), radius: 4)
+                }
+                .accessibilityLabel("Quick Actions")
+
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundStyle(Color.white.opacity(0.85))
+                        .shadow(color: .black.opacity(0.5), radius: 4)
+                }
             }
             .padding(.top, 16)
             .padding(.trailing, 16)
         }
         .task { await vm.load(film: film, currentUserID: appState.currentUser?.id) }
+        .popover(isPresented: $showActions) {
+            quickActionsMenu
+                .presentationCompactAdaptation(.popover)
+        }
+        .sheet(isPresented: $showAddToList) {
+            AddToListSheet(tmdbID: film.id, mediaType: film.mediaType, title: film.title, posterPath: film.posterPath, userID: appState.currentUser?.id)
+        }
+        .fullScreenCover(isPresented: $showRanking, onDismiss: {
+            Task { await vm.load(film: film, currentUserID: appState.currentUser?.id) }
+        }) {
+            RankingView()
+        }
         .sheet(item: $selectedFriend) { friend in
             NavigationStack { UserProfileView(user: friend) }
         }
+    }
+
+    // MARK: - Quick Actions
+    //
+    // Everything you'd want to do with this film now lives on its own detail screen instead of
+    // behind a "..." on a Search poster tile — same two actions, same wording, ported from the
+    // grid-tile menu this replaces (Cinema/Features/Search/SearchView.swift, before it was
+    // stripped down to poster-tap-only). "Rank This or That" upserts a fresh ranked_items row
+    // at a neutral score only if this film isn't ranked yet — an already-ranked film's real
+    // score is never touched, "Re-Rank" just reopens the battle screen.
+
+    private var quickActionsMenu: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                showActions = false
+                showAddToList = true
+            } label: {
+                Label("Add to List", systemImage: "bookmark")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+
+            Divider().background(CinemaTheme.Colors.border)
+
+            Button {
+                showActions = false
+                Task {
+                    if !isRanked {
+                        await vm.rankFilm(tmdbID: film.id, mediaType: film.mediaType, userID: appState.currentUser?.id)
+                    }
+                    showRanking = true
+                }
+            } label: {
+                Label(isRanked ? "Re-Rank" : "Rank This or That", systemImage: "circle.grid.cross")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(width: 230)
+        .background(CinemaTheme.Colors.surface)
     }
 
     // MARK: - Hero (not zoomed — uses .fit so full image shows)
