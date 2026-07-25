@@ -10,8 +10,7 @@ final class DiscoverViewModel {
     var newReleases: [MediaItem] = []
     var followingCount: Int = 0
     var friendActivity: [MediaItem] = []
-    var criticallyAcclaimed: [MediaItem] = []
-    var awardWinners: [MediaItem] = []
+    var highlyRated: [MediaItem] = []
     var platformRows: [(title: String, films: [MediaItem])] = []
     var recommendations: [MediaItem] = []
     var isLoading = false
@@ -28,8 +27,7 @@ final class DiscoverViewModel {
         }
 
         // Editorial
-        criticallyAcclaimed = (try? await TMDBClient.shared.criticallyAcclaimed()) ?? []
-        awardWinners = (try? await TMDBClient.shared.awardWinners()) ?? []
+        highlyRated = (try? await TMDBClient.shared.highlyRated()) ?? []
 
         // Platform rows
         let platforms: [(String, Int)] = [("On Netflix", 8), ("On Prime Video", 9), ("On Apple TV+", 350)]
@@ -129,14 +127,9 @@ struct DiscoverView: View {
                             MediaRow(title: "Recommended for You", films: vm.recommendations) { selectedFilm = $0 }
                         }
 
-                        // Critically Acclaimed
-                        if !vm.criticallyAcclaimed.isEmpty {
-                            MediaRow(title: "Critically Acclaimed", films: vm.criticallyAcclaimed) { selectedFilm = $0 }
-                        }
-
-                        // Award Winners
-                        if !vm.awardWinners.isEmpty {
-                            MediaRow(title: "Award Winners", films: vm.awardWinners) { selectedFilm = $0 }
+                        // Highly Rated
+                        if !vm.highlyRated.isEmpty {
+                            MediaRow(title: "Highly Rated", films: vm.highlyRated) { selectedFilm = $0 }
                         }
 
                         // Platform rows

@@ -69,29 +69,19 @@ struct TMDBClient {
         return results.results.compactMap { MediaItem(from: $0, forcedType: .tv) }
     }
 
-    /// Filtered to a high vote-average floor, then ordered by popularity rather than rating —
-    /// sorting by rating alone surfaces obscure well-reviewed titles nobody recognizes ahead of
-    /// acclaimed movies people have actually heard of.
-    func criticallyAcclaimed() async throws -> [MediaItem] {
+    /// TMDB has no real critic-score data (that's Rotten Tomatoes, a separate paid license) —
+    /// "Critically Acclaimed" and "Award Winners" used to be the same underlying signal (user
+    /// vote average/count) at two thresholds dressed up as if they meant different things, so
+    /// they're merged into one honestly-named row. Filtered to a high vote-average floor, then
+    /// ordered by popularity rather than rating — sorting by rating alone surfaces obscure
+    /// well-reviewed titles nobody recognizes ahead of acclaimed movies people have heard of.
+    /// Revisit once real Rotten Tomatoes critic data is worth paying for post-launch.
+    func highlyRated() async throws -> [MediaItem] {
         let url = baseURL
             .appending(path: "discover/movie")
             .appending(queryItems: [
                 .init(name: "sort_by", value: "popularity.desc"),
                 .init(name: "vote_count.gte", value: "1000"),
-                .init(name: "vote_average.gte", value: "8.0")
-            ])
-        let results: TMDBSearchResponse = try await fetch(url)
-        return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }
-    }
-
-    /// Same recognizability issue as `criticallyAcclaimed()` — ordered by popularity within the
-    /// high vote-count/vote-average floor instead of by raw vote count.
-    func awardWinners() async throws -> [MediaItem] {
-        let url = baseURL
-            .appending(path: "discover/movie")
-            .appending(queryItems: [
-                .init(name: "sort_by", value: "popularity.desc"),
-                .init(name: "vote_count.gte", value: "2000"),
                 .init(name: "vote_average.gte", value: "8.0")
             ])
         let results: TMDBSearchResponse = try await fetch(url)
