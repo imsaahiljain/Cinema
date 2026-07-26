@@ -468,7 +468,7 @@ struct MovieInfoView: View {
                 pillButton(title: "Add to List", systemImage: "bookmark") {
                     showAddToList = true
                 }
-                pillButton(title: isRanked ? "Re-Rank" : "Rank", systemImage: "circle.grid.cross") {
+                pillButton(title: "Rank", systemImage: "arrow.up.arrow.down") {
                     Task {
                         if !isRanked {
                             await vm.rankFilm(tmdbID: film.id, mediaType: film.mediaType, userID: appState.currentUser?.id)
