@@ -454,26 +454,27 @@ struct MovieInfoView: View {
 
     // MARK: - Action Buttons
     //
-    // Trailer stays the one filled/gold pill — it's the sole "watch something right now" action.
-    // Add to List and Rank are quiet outlined pills next to it, same treatment the rest of the
-    // app gives secondary actions (outlined over filled, so posters/art stay the visual focus).
+    // Trailer is the one full-width filled/gold pill — it's the sole "watch something right
+    // now" action. Add to List and Rank share a row below it as quiet outlined pills, same
+    // treatment the rest of the app gives secondary actions (outlined over filled, so
+    // posters/art stay the visual focus).
 
     private var actionButtons: some View {
         VStack(spacing: 10) {
+            if let key = vm.trailerKey {
+                trailerButton(key: key)
+            }
             HStack(spacing: 10) {
-                if let key = vm.trailerKey {
-                    trailerButton(key: key)
-                }
                 pillButton(title: "Add to List", systemImage: "bookmark") {
                     showAddToList = true
                 }
-            }
-            pillButton(title: isRanked ? "Re-Rank" : "Rank This or That", systemImage: "circle.grid.cross") {
-                Task {
-                    if !isRanked {
-                        await vm.rankFilm(tmdbID: film.id, mediaType: film.mediaType, userID: appState.currentUser?.id)
+                pillButton(title: isRanked ? "Re-Rank" : "Rank", systemImage: "circle.grid.cross") {
+                    Task {
+                        if !isRanked {
+                            await vm.rankFilm(tmdbID: film.id, mediaType: film.mediaType, userID: appState.currentUser?.id)
+                        }
+                        showRanking = true
                     }
-                    showRanking = true
                 }
             }
         }
