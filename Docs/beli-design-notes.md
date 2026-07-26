@@ -87,11 +87,14 @@
 
 ## Pairwise / Ranking Flow
 
-Not explicitly visible in screenshots but inferred from:
-- Score progression (restaurants accumulate decimal scores like 9.2, 10.0, 8.4)
-- "Rank again" button on restaurant detail
-- The `+` center tab triggers adding/ranking
-- New places enter the list at a default score, then move up/down via "Which do you prefer?" battles
+Confirmed directly (screenshots 224, 249 — previously this section only inferred the flow existed; it's now been actually observed). Rating a place is one continuous bottom-sheet sequence, not separate screens:
+
+1. **"How was it?"** — three plain color-fill circles, no borders, tap one: green "I liked it!", yellow "It was fine", pink "I didn't like it." This is a bucket/triage step, not the final score — it runs *before* any comparison.
+2. **"Which do you prefer?"** — appears immediately below, same sheet. Two outlined rounded-rect cards side by side (place name + city, text only, no photos), a small filled teal "OR" badge sitting in the gap between them. Tap either card to pick it — **no swipe anywhere in this flow.**
+3. Below the two cards, three text-link controls: **Undo** (back arrow, left), **Too tough** (bordered pill, center — logs "genuinely can't decide" rather than forcing a fake preference), **Skip** (forward arrow, right — defer this specific pairing, not a tie).
+4. Comparisons repeat (implied same bucket only, given the "How was it" step runs first) until the score settles; detail screen then shows "Rank again" and a locked/decimal "Your Beli Rating."
+
+Two affordances worth calling out because they're not just this app's polish, they're structural: **Undo** (a comparison can be walked back — nothing about pairwise rating is presented as irreversible) and **Too tough** (an explicit "no real preference" outcome distinct from skipping the pair entirely). Both are answers to a real problem any pairwise ranking system has — a forced binary choice with no escape hatch either corrupts the data (fake preference) or frustrates the user (no undo) — not cosmetic choices.
 
 ---
 
