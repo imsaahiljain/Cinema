@@ -1,73 +1,181 @@
 import SwiftUI
 
+// MARK: - Mock Data
+
 private struct MockFilm: Identifiable, Equatable {
     let id = UUID()
     let title: String
-    let year: String
     let color: Color
 }
 
-private let mockFilmPool: [MockFilm] = [
-    MockFilm(title: "Past Lives", year: "2023", color: Color(red: 0.23, green: 0.14, blue: 0.20)),
-    MockFilm(title: "Whiplash", year: "2014", color: Color(red: 0.12, green: 0.23, blue: 0.22)),
-    MockFilm(title: "Parasite", year: "2019", color: Color(red: 0.20, green: 0.19, blue: 0.11)),
-    MockFilm(title: "Her", year: "2013", color: Color(red: 0.16, green: 0.14, blue: 0.22)),
-    MockFilm(title: "Moonlight", year: "2016", color: Color(red: 0.10, green: 0.16, blue: 0.24)),
-    MockFilm(title: "The Batman", year: "2022", color: Color(red: 0.15, green: 0.15, blue: 0.15)),
-    MockFilm(title: "Dune", year: "2021", color: Color(red: 0.22, green: 0.17, blue: 0.09)),
-    MockFilm(title: "Portrait of a Lady on Fire", year: "2019", color: Color(red: 0.22, green: 0.10, blue: 0.10)),
-    MockFilm(title: "Everything Everywhere", year: "2022", color: Color(red: 0.10, green: 0.20, blue: 0.18)),
-    MockFilm(title: "The Lighthouse", year: "2019", color: Color(red: 0.17, green: 0.17, blue: 0.19)),
-    MockFilm(title: "Call Me by Your Name", year: "2017", color: Color(red: 0.20, green: 0.18, blue: 0.08)),
-    MockFilm(title: "Nightcrawler", year: "2014", color: Color(red: 0.18, green: 0.10, blue: 0.08)),
+private enum RankBucket: CaseIterable {
+    case liked, okay, disliked
+
+    var label: String {
+        switch self {
+        case .liked: "Liked it"
+        case .okay: "It was fine"
+        case .disliked: "Didn't like it"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .liked: Color(red: 0.39, green: 0.6, blue: 0.13)
+        case .okay: Color(red: 0.73, green: 0.46, blue: 0.09)
+        case .disliked: Color(red: 0.64, green: 0.18, blue: 0.18)
+        }
+    }
+}
+
+private let unratedPool: [MockFilm] = [
+    MockFilm(title: "Past Lives", color: Color(red: 0.23, green: 0.14, blue: 0.20)),
+    MockFilm(title: "Parasite", color: Color(red: 0.20, green: 0.19, blue: 0.11)),
+    MockFilm(title: "Her", color: Color(red: 0.16, green: 0.14, blue: 0.22)),
+    MockFilm(title: "The Batman", color: Color(red: 0.15, green: 0.15, blue: 0.15)),
+    MockFilm(title: "Dune", color: Color(red: 0.22, green: 0.17, blue: 0.09)),
+    MockFilm(title: "Everything Everywhere", color: Color(red: 0.10, green: 0.20, blue: 0.18)),
+    MockFilm(title: "The Lighthouse", color: Color(red: 0.17, green: 0.17, blue: 0.19)),
+    MockFilm(title: "Call Me by Your Name", color: Color(red: 0.20, green: 0.18, blue: 0.08)),
 ]
+
+// MARK: - View Model
 
 @Observable
 @MainActor
 private final class PrototypeViewModel {
-    var left: MockFilm = mockFilmPool[0]
-    var right: MockFilm = mockFilmPool[1]
-    var upNext: MockFilm = mockFilmPool[2]
-    var collected: [MockFilm] = []
-    var totalBattles = 0
+    enum Mode { case normal, onboarding }
+    enum Stage { case rate, compare, ranked }
+
+    var mode: Mode = .normal
+    var stage: Stage = .rate
+
+    var currentNew: MockFilm?
+    var chosenBucket: RankBucket?
+    var opponent: MockFilm?
+    var comparisonCount = 0
+    var lastPosition = 1
+    var lastBucketSize = 1
+
+    // "Too tough" only makes sense once narrowing has nearly converged — accepting
+    // the midpoint early would throw away real information, not just skip a hard call.
+    var tooToughAvailable: Bool { chosenBucket != nil && (hi - lo) <= 2 }
+
+    var pickTick = 0
+    var rankedTick = 0
+    var tooToughTick = 0
+
+    // Onboarding
+    var wallLeft: MockFilm?
+    var wallRight: MockFilm?
+    var wallSeenCount = 0
 
     private var pool: [MockFilm] = []
+    private var buckets: [RankBucket: [MockFilm]] = [.liked: [], .okay: [], .disliked: []]
+    private var lo = 0
+    private var hi = 0
+    private var bucketFilms: [MockFilm] = []
 
     init() {
-        reset()
+        // Seed each bucket with a couple of already-rated mock films so there's
+        // something real to compare against, like a user who already has a watched list.
+        buckets[.liked] = [
+            MockFilm(title: "Whiplash", color: Color(red: 0.12, green: 0.23, blue: 0.22)),
+            MockFilm(title: "Moonlight", color: Color(red: 0.10, green: 0.16, blue: 0.24)),
+            MockFilm(title: "Spirited Away", color: Color(red: 0.09, green: 0.20, blue: 0.20)),
+            MockFilm(title: "No Country for Old Men", color: Color(red: 0.16, green: 0.16, blue: 0.10)),
+            MockFilm(title: "The Social Network", color: Color(red: 0.11, green: 0.13, blue: 0.19)),
+            MockFilm(title: "Zodiac", color: Color(red: 0.14, green: 0.14, blue: 0.16)),
+        ]
+        buckets[.okay] = [
+            MockFilm(title: "Nightcrawler", color: Color(red: 0.18, green: 0.10, blue: 0.08)),
+            MockFilm(title: "Gone Girl", color: Color(red: 0.20, green: 0.17, blue: 0.10)),
+            MockFilm(title: "Prisoners", color: Color(red: 0.15, green: 0.15, blue: 0.15)),
+        ]
+        buckets[.disliked] = [
+            MockFilm(title: "Cats", color: Color(red: 0.17, green: 0.17, blue: 0.19)),
+            MockFilm(title: "mother!", color: Color(red: 0.21, green: 0.11, blue: 0.09)),
+        ]
+        pool = unratedPool.shuffled()
+        startNextNormal()
+        startNextOnboardingPair()
     }
 
-    // Reshuffles when the pool runs dry, so `avoiding` guards against the
-    // fresh shuffle coincidentally handing back a film already on screen
-    // (otherwise a film could occasionally end up facing itself).
-    private static func draw(_ pool: inout [MockFilm], avoiding: Set<UUID> = []) -> MockFilm {
-        if pool.isEmpty { pool = mockFilmPool.shuffled() }
-        if let index = pool.firstIndex(where: { !avoiding.contains($0.id) }) {
-            return pool.remove(at: index)
-        }
-        return pool.removeFirst()
+    func startNextNormal() {
+        if pool.isEmpty { pool = unratedPool.shuffled() }
+        currentNew = pool.removeFirst()
+        stage = .rate
+        chosenBucket = nil
+        comparisonCount = 0
     }
 
-    func commit(_ side: RankingDuelSide) {
-        totalBattles += 1
-        let winner = side == .left ? left : right
-        collected.append(winner)
-        if collected.count > 8 { collected.removeFirst() }
-        if side == .left {
-            right = upNext
+    func chooseBucket(_ bucket: RankBucket) {
+        chosenBucket = bucket
+        bucketFilms = buckets[bucket] ?? []
+        lo = 0
+        hi = bucketFilms.count
+        comparisonCount = 0
+        if bucketFilms.isEmpty {
+            finishNormal(position: 1, bucketSize: 1)
         } else {
-            left = upNext
+            stage = .compare
+            pickOpponent()
         }
-        upNext = Self.draw(&pool, avoiding: [left.id, right.id])
     }
 
-    func reset() {
-        pool = mockFilmPool.shuffled()
-        left = Self.draw(&pool)
-        right = Self.draw(&pool, avoiding: [left.id])
-        upNext = Self.draw(&pool, avoiding: [left.id, right.id])
-        collected = []
-        totalBattles = 0
+    private func pickOpponent() {
+        let idx = min((lo + hi) / 2, bucketFilms.count - 1)
+        opponent = bucketFilms[max(0, idx)]
+    }
+
+    // newFilmWon: true if the film being added won this comparison
+    func choose(newFilmWon: Bool) {
+        pickTick += 1
+        comparisonCount += 1
+        let idx = min((lo + hi) / 2, bucketFilms.count - 1)
+        if newFilmWon { hi = idx } else { lo = idx + 1 }
+        if lo >= hi || comparisonCount >= 4 {
+            finishNormal(position: lo + 1, bucketSize: bucketFilms.count + 1)
+        } else {
+            pickOpponent()
+        }
+    }
+
+    func tooTough() {
+        guard tooToughAvailable else { return }
+        tooToughTick += 1
+        let position = (lo + hi) / 2 + 1
+        finishNormal(position: position, bucketSize: bucketFilms.count + 1)
+    }
+
+    private func finishNormal(position: Int, bucketSize: Int) {
+        rankedTick += 1
+        if let new = currentNew, let bucket = chosenBucket {
+            var films = buckets[bucket] ?? []
+            films.insert(new, at: min(position - 1, films.count))
+            buckets[bucket] = films
+        }
+        lastPosition = position
+        lastBucketSize = bucketSize
+        stage = .ranked
+    }
+
+    // MARK: Onboarding
+
+    func startNextOnboardingPair() {
+        let shuffled = unratedPool.shuffled()
+        wallLeft = shuffled[0]
+        wallRight = shuffled[1]
+    }
+
+    func onboardingPick() {
+        pickTick += 1
+        wallSeenCount += 1
+        startNextOnboardingPair()
+    }
+
+    func onboardingHaventSeen() {
+        startNextOnboardingPair()
     }
 }
 
@@ -75,218 +183,298 @@ private final class PrototypeViewModel {
 
 struct RankingPrototypeView: View {
     @State private var vm = PrototypeViewModel()
-    @State private var dragTranslation: CGFloat = 0
-    @State private var winnerStartSide: RankingDuelSide?
-    @State private var thresholdCrossed = false
-    @State private var pulseSide: RankingDuelSide?
-
-    private let commitProgress: CGFloat = 0.6
 
     var body: some View {
-        GeometryReader { geo in
-            let halfWidth = geo.size.width / 2
-            let progress = revealProgress(travel: halfWidth)
-
-            ZStack {
-                CinemaTheme.Colors.background.ignoresSafeArea()
-
-                HStack(spacing: 0) {
-                    posterSide(.left, geo: geo, progress: progress, travel: halfWidth)
-                    posterSide(.right, geo: geo, progress: progress, travel: halfWidth)
+        ZStack {
+            CinemaTheme.Colors.background.ignoresSafeArea()
+            VStack(spacing: 0) {
+                modeSwitcher
+                Group {
+                    if vm.mode == .normal {
+                        normalFlow
+                    } else {
+                        onboardingFlow
+                    }
                 }
-                .frame(width: geo.size.width, height: geo.size.height)
-                .ignoresSafeArea()
-
-                VStack(spacing: 26) {
-                    Image(systemName: "arrow.left.arrow.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(CinemaTheme.Colors.gold)
-                    Circle()
-                        .strokeBorder(CinemaTheme.Colors.gold.opacity(0.8), lineWidth: 1)
-                        .background(Circle().fill(CinemaTheme.Colors.background.opacity(0.6)))
-                        .frame(width: 30, height: 30)
-                        .overlay(
-                            Text("vs")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(CinemaTheme.Colors.gold)
-                        )
-                }
-                .opacity(1 - progress)
-
-                VStack {
-                    topBar
-                    Spacer()
-                    collectionStrip
-                        .padding(.bottom, 20)
-                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 8)
-                    .onChanged { value in
-                        if winnerStartSide == nil {
-                            winnerStartSide = value.startLocation.x < halfWidth ? .left : .right
-                        }
-                        dragTranslation = value.translation.width
-                        let p = revealProgress(travel: halfWidth)
-                        let crossed = p > commitProgress
-                        if crossed != thresholdCrossed { thresholdCrossed = crossed }
-                    }
-                    .onEnded { _ in
-                        let p = revealProgress(travel: halfWidth)
-                        if p > commitProgress, let winner = winnerStartSide {
-                            commitPick(winner)
-                        } else {
-                            withAnimation(.spring(duration: 0.35)) { dragTranslation = 0 }
-                            thresholdCrossed = false
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                                winnerStartSide = nil
-                            }
-                        }
-                    }
-            )
         }
-        .ignoresSafeArea()
-        .sensoryFeedback(.selection, trigger: thresholdCrossed)
-        .sensoryFeedback(.impact(weight: .medium), trigger: vm.totalBattles)
+        .sensoryFeedback(.impact(weight: .medium), trigger: vm.pickTick)
+        .sensoryFeedback(.success, trigger: vm.rankedTick)
+        .sensoryFeedback(.warning, trigger: vm.tooToughTick)
     }
 
-    private func revealProgress(travel: CGFloat) -> CGFloat {
-        guard let winnerStartSide else { return 0 }
-        let signed = winnerStartSide == .left ? dragTranslation : -dragTranslation
-        return max(0, min(1, signed / travel))
+    private var modeSwitcher: some View {
+        HStack(spacing: 4) {
+            modeButton("Normal", .normal)
+            modeButton("Onboarding", .onboarding)
+        }
+        .padding(4)
+        .background(CinemaTheme.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 20)
+        .padding(.top, 56)
+        .padding(.bottom, 10)
     }
+
+    private func modeButton(_ label: String, _ mode: PrototypeViewModel.Mode) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { vm.mode = mode }
+        } label: {
+            Text(label)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(vm.mode == mode ? CinemaTheme.Colors.background : CinemaTheme.Colors.textSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 9)
+                .background(vm.mode == mode ? CinemaTheme.Colors.gold : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 9))
+        }
+    }
+
+    // MARK: Normal flow
 
     @ViewBuilder
-    private func posterSide(_ side: RankingDuelSide, geo: GeometryProxy, progress: CGFloat, travel: CGFloat) -> some View {
-        let film = side == .left ? vm.left : vm.right
-        let isWinner = winnerStartSide == side
-        let isLoser = winnerStartSide != nil && winnerStartSide != side
-
-        let base = PrototypePosterSide(film: film, isPulsing: pulseSide == side)
-            .id(film.id)
-            .frame(width: geo.size.width / 2)
-            .transition(.asymmetric(
-                insertion: .move(edge: side == .left ? .leading : .trailing).combined(with: .opacity),
-                removal: .move(edge: side == .left ? .leading : .trailing).combined(with: .opacity)
-            ))
-
-        DiagonalOverarchWinEffect.apply(base, .init(
-            isWinner: isWinner,
-            isLoser: isLoser,
-            side: side,
-            progress: progress,
-            travel: travel
-        ))
-        .animation(.easeOut(duration: 0.15), value: progress)
-    }
-
-    private func commitPick(_ side: RankingDuelSide) {
-        pulseSide = side
-        withAnimation(.spring(duration: 0.4, bounce: 0.3)) {
-            vm.commit(side)
-            dragTranslation = 0
-        }
-        thresholdCrossed = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            pulseSide = nil
-            winnerStartSide = nil
-        }
-    }
-
-    private var topBar: some View {
-        HStack {
-            Button { vm.reset() } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                    .frame(width: 40, height: 40)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Circle())
+    private var normalFlow: some View {
+        switch vm.stage {
+        case .rate:
+            if let film = vm.currentNew { RateItView(film: film) { vm.chooseBucket($0) } }
+        case .compare:
+            if let new = vm.currentNew, let opp = vm.opponent, let bucket = vm.chosenBucket {
+                CompareView(
+                    left: opp, right: new, bucketColor: bucket.color,
+                    showHaventSeen: false,
+                    tooToughAvailable: vm.tooToughAvailable,
+                    onPick: { leftWon in vm.choose(newFilmWon: !leftWon) },
+                    onTooTough: vm.tooTough, onHaventSeen: {}
+                )
             }
-            Spacer()
-            Text("This or that")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(CinemaTheme.Colors.textPrimary)
-            Spacer()
-            Text("\(vm.totalBattles)")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                .frame(width: 40, alignment: .trailing)
+        case .ranked:
+            RankedResultView(
+                title: vm.currentNew?.title ?? "",
+                position: vm.lastPosition, bucketSize: vm.lastBucketSize,
+                bucketLabel: vm.chosenBucket?.label ?? ""
+            ) { vm.startNextNormal() }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 56)
     }
 
-    private var collectionStrip: some View {
-        HStack(spacing: -14) {
-            ForEach(Array(vm.collected.enumerated()), id: \.element.id) { index, film in
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(film.color)
-                    .frame(width: 26, height: 38)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 5)
-                            .strokeBorder(
-                                index == vm.collected.count - 1
-                                    ? CinemaTheme.Colors.gold
-                                    : Color.white.opacity(0.2),
-                                lineWidth: index == vm.collected.count - 1 ? 1.5 : 1
-                            )
-                    )
-                    .rotationEffect(.degrees(Double(index - vm.collected.count / 2) * 4))
-                    .scaleEffect(index == vm.collected.count - 1 ? 1.08 : 1.0)
+    // MARK: Onboarding flow
+
+    private var onboardingFlow: some View {
+        Group {
+            if let left = vm.wallLeft, let right = vm.wallRight {
+                CompareView(
+                    left: left, right: right, bucketColor: CinemaTheme.Colors.gold,
+                    showHaventSeen: true,
+                    tooToughAvailable: false,
+                    onPick: { _ in vm.onboardingPick() },
+                    onTooTough: {}, onHaventSeen: vm.onboardingHaventSeen,
+                    progressLabel: "\(min(vm.wallSeenCount, 10)) of 10 films ranked"
+                )
             }
         }
-        .animation(.spring(duration: 0.4), value: vm.collected.count)
     }
 }
 
-// MARK: - Poster Side
+// MARK: - Rate It (bucket triage)
 
-private struct PrototypePosterSide: View {
+private struct RateItView: View {
     let film: MockFilm
-    let isPulsing: Bool
+    let onPick: (RankBucket) -> Void
+    @State private var selected: RankBucket?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 20)
+
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 8).fill(film.color).frame(width: 56, height: 84)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(film.title).font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
+                    Text("Marked as watched").font(.system(size: 13)).foregroundStyle(.white.opacity(0.55))
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 24)
+
+            Spacer()
+
+            Text("How was it?")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.bottom, 40)
+
+            HStack(spacing: 0) {
+                ForEach(RankBucket.allCases, id: \.self) { bucket in
+                    Button {
+                        selected = bucket
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { onPick(bucket) }
+                    } label: {
+                        VStack(spacing: 12) {
+                            Circle()
+                                .fill(bucket.color)
+                                .frame(width: 76, height: 76)
+                                .overlay(
+                                    Circle().strokeBorder(.white, lineWidth: selected == bucket ? 2 : 0)
+                                )
+                                .scaleEffect(selected == bucket ? 1.08 : 1.0)
+                            Text(bucket.label)
+                                .font(.system(size: 13))
+                                .foregroundStyle(.white.opacity(0.75))
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .animation(.spring(duration: 0.25), value: selected)
+                }
+            }
+            .padding(.horizontal, 20)
+
+            Spacer()
+            Spacer()
+        }
+    }
+}
+
+// MARK: - Compare (tap-to-pick duel)
+
+private struct CompareView: View {
+    let left: MockFilm
+    let right: MockFilm
+    let bucketColor: Color
+    let showHaventSeen: Bool
+    let tooToughAvailable: Bool
+    let onPick: (Bool) -> Void  // true = left won
+    let onTooTough: () -> Void
+    let onHaventSeen: () -> Void
+    var progressLabel: String? = nil
+
+    @State private var pulsedSide: RankingDuelSide?
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                film.color.opacity(0.7)
+                HStack(spacing: 0) {
+                    card(left, side: .left, height: geo.size.height)
+                    Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1)
+                    card(right, side: .right, height: geo.size.height)
+                }
 
-                VStack(spacing: 10) {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(film.color)
-                        .overlay(
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 20))
-                                .foregroundStyle(.white.opacity(0.25))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
-                        )
-                        .frame(width: geo.size.width * 0.62, height: geo.size.width * 0.62 * 1.5)
-
-                    VStack(spacing: 2) {
-                        Text(film.title)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .padding(.horizontal, 12)
-                        Text(film.year)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.55))
+                VStack(spacing: 4) {
+                    if let progressLabel {
+                        Text(progressLabel)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.white.opacity(0.6))
                     }
+                    Text("Which do you prefer?")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .shadow(color: .black.opacity(0.7), radius: 8)
+                .padding(.top, 22)
+                .frame(maxHeight: .infinity, alignment: .top)
+
+                if showHaventSeen {
+                    Button(action: onHaventSeen) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "eye.slash")
+                            Text("I haven't seen one of these")
+                        }
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.3)))
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 28)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                } else {
+                    Button(action: onTooTough) {
+                        Text("Too tough")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.white.opacity(tooToughAvailable ? 0.9 : 0.25))
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 20)
+                            .background(.ultraThinMaterial.opacity(tooToughAvailable ? 1 : 0.4))
+                            .clipShape(Capsule())
+                    }
+                    .disabled(!tooToughAvailable)
+                    .padding(.bottom, 28)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
                 }
             }
-            .frame(width: geo.size.width, height: geo.size.height)
         }
-        .overlay(
-            RoundedRectangle(cornerRadius: 0)
-                .strokeBorder(CinemaTheme.Colors.gold.opacity(isPulsing ? 0.9 : 0), lineWidth: 3)
-        )
-        .scaleEffect(isPulsing ? 1.02 : 1.0)
-        .animation(.spring(duration: 0.3), value: isPulsing)
+        .ignoresSafeArea(edges: .bottom)
+    }
+
+    @ViewBuilder
+    private func card(_ film: MockFilm, side: RankingDuelSide, height: CGFloat) -> some View {
+        Button {
+            pulsedSide = side
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                onPick(side == .left)
+            }
+        } label: {
+            ZStack(alignment: .bottom) {
+                film.color
+                LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .center, endPoint: .bottom)
+                Text(film.title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 100)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .clipped()
+            .overlay(
+                Rectangle().strokeBorder(pulsedSide == side ? bucketColor : Color.clear, lineWidth: 3)
+            )
+            .scaleEffect(pulsedSide == side ? 1.02 : 1.0)
+            .brightness(pulsedSide == side ? 0.06 : 0)
+        }
+        .buttonStyle(.plain)
+        .animation(.spring(duration: 0.3), value: pulsedSide)
+    }
+}
+
+// MARK: - Ranked Result
+
+private struct RankedResultView: View {
+    let title: String
+    let position: Int
+    let bucketSize: Int
+    let bucketLabel: String
+    let onContinue: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(CinemaTheme.Colors.gold)
+            Text("\(title) ranked!")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(.white)
+            Text("#\(position) of \(bucketSize) in \"\(bucketLabel)\"")
+                .font(.system(size: 15))
+                .foregroundStyle(.white.opacity(0.6))
+            Spacer()
+            Button(action: onContinue) {
+                Text("Rate another")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(CinemaTheme.Colors.background)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(CinemaTheme.Colors.gold)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 40)
+        }
     }
 }
 

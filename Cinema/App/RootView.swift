@@ -3,12 +3,19 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppState.self) private var appState
 
+    // TEMP PROTOTYPE ENTRY POINT — this whole branch is the This-or-That redesign
+    // experiment, so this stays up for hands-on testing until a direction is picked.
+    // Remove before merging back to main.
+    private let showRankingPrototype = true
+
     var body: some View {
         ZStack {
             // Always fill the window — prevents any black flash during transitions
             CinemaTheme.Colors.background.ignoresSafeArea()
 
-            if appState.isCheckingSession {
+            if showRankingPrototype {
+                RankingPrototypeView()
+            } else if appState.isCheckingSession {
                 SplashView()
             } else if appState.showingOnboarding {
                 // Must be checked before isAuthenticated — keeps user inside
