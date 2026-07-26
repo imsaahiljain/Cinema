@@ -179,7 +179,6 @@ struct MovieInfoView: View {
     let film: MediaItem
     @State private var vm = MovieInfoViewModel()
     @State private var selectedFriend: CinemaUser?
-    @State private var showActions = false
     @State private var showAddToList = false
     @State private var showRanking = false
     @Environment(AppState.self) private var appState
@@ -201,30 +200,16 @@ struct MovieInfoView: View {
                 }
             }
 
-            HStack(spacing: 14) {
-                Button { showActions = true } label: {
-                    Image(systemName: "ellipsis.circle.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(Color.white.opacity(0.85))
-                        .shadow(color: .black.opacity(0.5), radius: 4)
-                }
-                .accessibilityLabel("Quick Actions")
-
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(Color.white.opacity(0.85))
-                        .shadow(color: .black.opacity(0.5), radius: 4)
-                }
+            Button { dismiss() } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 30))
+                    .foregroundStyle(Color.white.opacity(0.85))
+                    .shadow(color: .black.opacity(0.5), radius: 4)
             }
             .padding(.top, 16)
             .padding(.trailing, 16)
         }
         .task { await vm.load(film: film, currentUserID: appState.currentUser?.id) }
-        .popover(isPresented: $showActions) {
-            quickActionsMenu
-                .presentationCompactAdaptation(.popover)
-        }
         .sheet(isPresented: $showAddToList) {
             AddToListSheet(tmdbID: film.id, mediaType: film.mediaType, title: film.title, posterPath: film.posterPath, userID: appState.currentUser?.id)
         }
@@ -236,54 +221,6 @@ struct MovieInfoView: View {
         .sheet(item: $selectedFriend) { friend in
             NavigationStack { UserProfileView(user: friend) }
         }
-    }
-
-    // MARK: - Quick Actions
-    //
-    // Everything you'd want to do with this film now lives on its own detail screen instead of
-    // behind a "..." on a Search poster tile — same two actions, same wording, ported from the
-    // grid-tile menu this replaces (Cinema/Features/Search/SearchView.swift, before it was
-    // stripped down to poster-tap-only). "Rank This or That" upserts a fresh ranked_items row
-    // at a neutral score only if this film isn't ranked yet — an already-ranked film's real
-    // score is never touched, "Re-Rank" just reopens the battle screen.
-
-    private var quickActionsMenu: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                showActions = false
-                showAddToList = true
-            } label: {
-                Label("Add to List", systemImage: "bookmark")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-
-            Divider().background(CinemaTheme.Colors.border)
-
-            Button {
-                showActions = false
-                Task {
-                    if !isRanked {
-                        await vm.rankFilm(tmdbID: film.id, mediaType: film.mediaType, userID: appState.currentUser?.id)
-                    }
-                    showRanking = true
-                }
-            } label: {
-                Label(isRanked ? "Re-Rank" : "Rank This or That", systemImage: "circle.grid.cross")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-        }
-        .frame(width: 230)
-        .background(CinemaTheme.Colors.surface)
     }
 
     // MARK: - Hero (not zoomed — uses .fit so full image shows)
@@ -381,10 +318,10 @@ struct MovieInfoView: View {
                 }
             }
 
-            // Trailer + action buttons
-            if vm.trailerKey != nil || !vm.friendTakes.isEmpty {
-                actionButtons
-            }
+            // Add to List / Rank — the two things you'd actually do with this film, live right
+            // here instead of behind a "..." overflow menu. No separate share/post button:
+            // ranking is what posts to the feed, so there's nothing else to add.
+            actionButtons
 
             // Genres
             if !film.genreNames.isEmpty {
@@ -516,28 +453,66 @@ struct MovieInfoView: View {
     }
 
     // MARK: - Action Buttons
+    //
+    // Trailer stays the one filled/gold pill — it's the sole "watch something right now" action.
+    // Add to List and Rank are quiet outlined pills next to it, same treatment the rest of the
+    // app gives secondary actions (outlined over filled, so posters/art stay the visual focus).
 
     private var actionButtons: some View {
-        HStack(spacing: 12) {
-            if let key = vm.trailerKey {
-                Button {
-                    if let url = URL(string: "https://www.youtube.com/watch?v=\(key)") {
-                        UIApplication.shared.open(url)
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("Trailer")
-                            .font(.system(size: 15, weight: .semibold))
-                    }
-                    .foregroundStyle(.black)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(CinemaTheme.Colors.gold)
-                    .clipShape(Capsule())
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                if let key = vm.trailerKey {
+                    trailerButton(key: key)
+                }
+                pillButton(title: "Add to List", systemImage: "bookmark") {
+                    showAddToList = true
                 }
             }
+            pillButton(title: isRanked ? "Re-Rank" : "Rank This or That", systemImage: "circle.grid.cross") {
+                Task {
+                    if !isRanked {
+                        await vm.rankFilm(tmdbID: film.id, mediaType: film.mediaType, userID: appState.currentUser?.id)
+                    }
+                    showRanking = true
+                }
+            }
+        }
+    }
+
+    private func trailerButton(key: String) -> some View {
+        Button {
+            if let url = URL(string: "https://www.youtube.com/watch?v=\(key)") {
+                UIApplication.shared.open(url)
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                Text("Trailer")
+                    .font(.system(size: 15, weight: .semibold))
+            }
+            .foregroundStyle(.black)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(CinemaTheme.Colors.gold)
+            .clipShape(Capsule())
+        }
+    }
+
+    private func pillButton(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .foregroundStyle(CinemaTheme.Colors.textPrimary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .overlay(Capsule().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
         }
     }
 
