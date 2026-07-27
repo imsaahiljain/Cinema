@@ -161,16 +161,6 @@ final class MovieInfoViewModel {
         } catch {}
     }
 
-    // Same default score / upsert shape as ListsViewModel.rankFilm — a film enters ranking at a
-    // neutral 1500 and the battles do the rest. Only ever called when the film isn't ranked yet
-    // (callers check `isRanked` first), so this never resets an existing real score.
-    func rankFilm(tmdbID: Int, mediaType: MediaType, userID: UUID?) async {
-        guard let userID else { return }
-        try? await SupabaseClient.shared.from("ranked_items")
-            .upsert(["user_id": userID.uuidString, "tmdb_id": String(tmdbID),
-                     "media_type": mediaType.rawValue, "elo_score": String(1500.0)])
-            .execute()
-    }
 }
 
 // MARK: - MovieInfoView
@@ -216,7 +206,7 @@ struct MovieInfoView: View {
         .fullScreenCover(isPresented: $showRanking, onDismiss: {
             Task { await vm.load(film: film, currentUserID: appState.currentUser?.id) }
         }) {
-            RankingView()
+            RankingView(film: film)
         }
         .sheet(item: $selectedFriend) { friend in
             NavigationStack { UserProfileView(user: friend) }
@@ -469,12 +459,7 @@ struct MovieInfoView: View {
                     showAddToList = true
                 }
                 pillButton(title: "Rank", systemImage: "arrow.up.arrow.down") {
-                    Task {
-                        if !isRanked {
-                            await vm.rankFilm(tmdbID: film.id, mediaType: film.mediaType, userID: appState.currentUser?.id)
-                        }
-                        showRanking = true
-                    }
+                    showRanking = true
                 }
             }
         }

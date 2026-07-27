@@ -125,21 +125,6 @@ final class ListsViewModel {
         return nil
     }
 
-    /// Adds a film to ranked_items (same default score Search's "add to ranked" uses).
-    /// Doesn't touch the source list — callers decide whether to also remove it
-    /// (Watchlist graduates a film out; a custom list is a persistent collection,
-    /// so ranking from one doesn't remove it there).
-    func rankFilm(tmdbID: Int, mediaType: MediaType, userID: UUID?) async {
-        guard let userID else { return }
-        do {
-            try await SupabaseClient.shared.from("ranked_items")
-                .upsert(["user_id": userID.uuidString, "tmdb_id": String(tmdbID),
-                         "media_type": mediaType.rawValue, "elo_score": String(1500.0)])
-                .execute()
-        } catch {}
-        await loadWatched(userID: userID)
-    }
-
     func removeFromWatchlist(entry: WatchlistEntry) async {
         do {
             try await SupabaseClient.shared.from("watchlist")
@@ -187,7 +172,7 @@ struct ListsView: View {
     @State private var vm = ListsViewModel()
     @State private var selection: ListsSelection = .watched
     @State private var showCreateList = false
-    @State private var showRanking = false
+    @State private var rankingFilm: MediaItem?
     @State private var listPendingDelete: CustomList?
     @State private var watchlistEntryPendingDelete: WatchlistEntry?
     @State private var listItemPendingDelete: ListItem?
@@ -226,7 +211,11 @@ struct ListsView: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $showRanking) { RankingView() }
+        .fullScreenCover(item: $rankingFilm, onDismiss: {
+            Task { await vm.loadWatched(userID: appState.currentUser?.id) }
+        }) { film in
+            RankingView(film: film)
+        }
         .alert(
             "Delete \u{201C}\(listPendingDelete?.name ?? "")\u{201D}?",
             isPresented: Binding(
@@ -387,9 +376,8 @@ struct ListsView: View {
                         PosterRow(rank: nil, media: vm.films[entry.tmdbID], tmdbID: entry.tmdbID) {
                             RankItButton {
                                 Task {
-                                    await vm.rankFilm(tmdbID: entry.tmdbID, mediaType: entry.mediaType, userID: appState.currentUser?.id)
                                     await vm.removeFromWatchlist(entry: entry)
-                                    showRanking = true
+                                    rankingFilm = vm.films[entry.tmdbID]
                                 }
                             }
                         }
@@ -422,10 +410,7 @@ struct ListsView: View {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         PosterRow(rank: nil, media: vm.films[item.tmdbID], tmdbID: item.tmdbID) {
                             RankItButton {
-                                Task {
-                                    await vm.rankFilm(tmdbID: item.tmdbID, mediaType: item.mediaType, userID: appState.currentUser?.id)
-                                    showRanking = true
-                                }
+                                rankingFilm = vm.films[item.tmdbID]
                             }
                         }
                         .contextMenu {

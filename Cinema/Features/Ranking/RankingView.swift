@@ -1,169 +1,235 @@
 import SwiftUI
 import Supabase
 
+// MARK: - Rank Bucket
+
+// Liked/Okay/Disliked map onto ELO bands rather than a separate stored column —
+// a film's bucket is just where its elo_score lands, so Lists' existing live
+// sort-by-elo-score keeps working unmodified.
+enum RankBucket: CaseIterable {
+    case liked, okay, disliked
+
+    var label: String {
+        switch self {
+        case .liked: "Liked it"
+        case .okay: "It was fine"
+        case .disliked: "Didn't like it"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .liked: Color(red: 0.39, green: 0.6, blue: 0.13)
+        case .okay: Color(red: 0.73, green: 0.46, blue: 0.09)
+        case .disliked: Color(red: 0.64, green: 0.18, blue: 0.18)
+        }
+    }
+
+    var startingElo: Double {
+        switch self {
+        case .liked: 1800
+        case .okay: 1500
+        case .disliked: 1200
+        }
+    }
+
+    var lowerBound: Double {
+        switch self {
+        case .liked: 1650
+        case .okay: 1350
+        case .disliked: -.infinity
+        }
+    }
+
+    var upperBound: Double {
+        switch self {
+        case .liked: .infinity
+        case .okay: 1650
+        case .disliked: 1350
+        }
+    }
+}
+
 // MARK: - ViewModel
 
 @Observable
 @MainActor
 final class RankingViewModel {
-    var currentPair: (MediaItem, MediaItem)?
-    var rankedItems: [RankedItem] = []
-    var isLoading = false
-    var flashMessage: String?
-    var totalBattles = 0
+    enum Stage { case rate, loadingOpponent, compare, ranked }
 
-    private var recentMatchups: [(Int, Int)] = []
+    let film: MediaItem
+    var stage: Stage = .rate
+    var chosenBucket: RankBucket?
+    var opponent: MediaItem?
+    var lastPosition = 1
+    var lastBucketSize = 1
 
-    func loadNextPair(userID: UUID?) async {
+    // Only offer "Too tough" once narrowing has nearly converged — accepting the
+    // midpoint early would throw away real information, not just skip a hard call.
+    var tooToughAvailable: Bool { chosenBucket != nil && (hi - lo) <= 2 }
+
+    var pickTick = 0
+    var rankedTick = 0
+    var tooToughTick = 0
+
+    private var lo = 0
+    private var hi = 0
+    private var comparisonCount = 0
+    private var filmElo: Double = 1500
+    private var bucketItems: [RankedItem] = []
+    private var opponentItem: RankedItem?
+
+    init(film: MediaItem) {
+        self.film = film
+    }
+
+    func chooseBucket(_ bucket: RankBucket, userID: UUID?) async {
         guard let userID else { return }
-        isLoading = currentPair == nil
+        chosenBucket = bucket
+        filmElo = bucket.startingElo
+
         do {
-            let items: [RankedItem] = try await SupabaseClient.shared
+            var query = SupabaseClient.shared
                 .from("ranked_items")
                 .select()
                 .eq("user_id", value: userID)
+                .eq("media_type", value: film.mediaType.rawValue)
+                .neq("tmdb_id", value: film.id)
+            if bucket.lowerBound.isFinite { query = query.gte("elo_score", value: bucket.lowerBound) }
+            if bucket.upperBound.isFinite { query = query.lt("elo_score", value: bucket.upperBound) }
+            let items: [RankedItem] = try await query
                 .order("elo_score", ascending: false)
-                .execute()
-                .value
-            rankedItems = items
-            if let pair = selectPair(from: items) {
-                let left  = try await TMDBClient.shared.details(tmdbID: pair.0, mediaType: .movie)
-                let right = try await TMDBClient.shared.details(tmdbID: pair.1, mediaType: .movie)
-                withAnimation(.easeInOut(duration: 0.25)) { currentPair = (left, right) }
-            }
-        } catch {}
-        isLoading = false
-    }
-
-    // 70% ELO proximity, 20% new entrant fast-calibration, 10% stress test
-    private func selectPair(from items: [RankedItem]) -> (Int, Int)? {
-        guard items.count >= 2 else { return nil }
-        let roll = Double.random(in: 0...1)
-        let pair: (Int, Int)?
-        if roll < 0.70 {
-            pair = proximityPair(items)
-        } else if roll < 0.90 {
-            pair = newEntrantPair(items)
-        } else {
-            pair = stressTestPair(items)
+                .execute().value
+            bucketItems = items
+        } catch {
+            bucketItems = []
         }
-        return pair ?? proximityPair(items)
-    }
-
-    private func proximityPair(_ items: [RankedItem]) -> (Int, Int)? {
-        let sorted = items.sorted { $0.eloScore > $1.eloScore }
-        for i in 0..<(sorted.count - 1) {
-            let a = sorted[i].tmdbID
-            let b = sorted[i + 1].tmdbID
-            if !wasRecentlyMatched(a, b) { return (a, b) }
-        }
-        return (sorted[0].tmdbID, sorted[1].tmdbID)
-    }
-
-    private func newEntrantPair(_ items: [RankedItem]) -> (Int, Int)? {
-        let newbies = items.filter { abs($0.eloScore - 1500) < 20 }
-        guard let newbie = newbies.randomElement(),
-              let opponent = items.filter({ $0.tmdbID != newbie.tmdbID }).randomElement()
-        else { return nil }
-        return (newbie.tmdbID, opponent.tmdbID)
-    }
-
-    private func stressTestPair(_ items: [RankedItem]) -> (Int, Int)? {
-        guard let top = items.max(by: { $0.eloScore < $1.eloScore }),
-              let challenger = items.filter({ $0.tmdbID != top.tmdbID }).randomElement()
-        else { return nil }
-        return (top.tmdbID, challenger.tmdbID)
-    }
-
-    private func wasRecentlyMatched(_ a: Int, _ b: Int) -> Bool {
-        recentMatchups.contains { ($0.0 == a && $0.1 == b) || ($0.0 == b && $0.1 == a) }
-    }
-
-    func choose(winner: MediaItem, loser: MediaItem, userID: UUID?) async {
-        guard let userID else { return }
-
-        let winnerItem = rankedItems.first { $0.tmdbID == winner.id }
-        let loserItem  = rankedItems.first { $0.tmdbID == loser.id }
-        let wElo = winnerItem?.eloScore ?? 1500
-        let lElo = loserItem?.eloScore ?? 1500
-
-        let (newWinner, newLoser) = ELOService.newRatings(winnerRating: wElo, loserRating: lElo)
-
-        // Track matchup to avoid repeats
-        recentMatchups.append((winner.id, loser.id))
-        if recentMatchups.count > 30 { recentMatchups.removeFirst() }
-        totalBattles += 1
 
         do {
-            // Upsert winner
-            try await SupabaseClient.shared
-                .from("ranked_items")
-                .upsert([
-                    "user_id": userID.uuidString,
-                    "tmdb_id": String(winner.id),
-                    "media_type": "movie",
-                    "elo_score": String(newWinner),
-                ])
-                .execute()
-
-            // Upsert loser
-            try await SupabaseClient.shared
-                .from("ranked_items")
-                .upsert([
-                    "user_id": userID.uuidString,
-                    "tmdb_id": String(loser.id),
-                    "media_type": "movie",
-                    "elo_score": String(newLoser),
-                ])
-                .execute()
-
-            // Log match
-            try await SupabaseClient.shared
-                .from("elo_matches")
-                .insert([
-                    "user_id": userID.uuidString,
-                    "winner_tmdb_id": String(winner.id),
-                    "loser_tmdb_id": String(loser.id),
-                    "media_type": "movie",
-                ])
-                .execute()
+            try await SupabaseClient.shared.from("ranked_items").upsert([
+                "user_id": userID.uuidString, "tmdb_id": String(film.id),
+                "media_type": film.mediaType.rawValue, "elo_score": String(filmElo),
+            ]).execute()
         } catch {}
 
-        await loadNextPair(userID: userID)
-        await showFlash(for: winner, newElo: newWinner)
+        lo = 0; hi = bucketItems.count; comparisonCount = 0
+        if bucketItems.isEmpty {
+            await finish()
+        } else {
+            await loadOpponent()
+        }
     }
 
-    private func showFlash(for film: MediaItem, newElo: Double) async {
-        let sortedElos = rankedItems.map { $0.eloScore }.sorted(by: >)
-        let rank = (sortedElos.firstIndex { newElo >= $0 } ?? sortedElos.count) + 1
-        withAnimation { flashMessage = "\(film.title) — #\(rank)" }
-        try? await Task.sleep(for: .seconds(1.8))
-        withAnimation { flashMessage = nil }
+    private func loadOpponent() async {
+        stage = .loadingOpponent
+        let idx = min((lo + hi) / 2, bucketItems.count - 1)
+        let item = bucketItems[max(0, idx)]
+        opponentItem = item
+        opponent = try? await TMDBClient.shared.details(tmdbID: item.tmdbID, mediaType: item.mediaType)
+        stage = .compare
+    }
+
+    // filmWon: true if the film being ranked won this comparison
+    func choose(filmWon: Bool, userID: UUID?) async {
+        guard let userID, let oppItem = opponentItem else { return }
+        pickTick += 1
+        comparisonCount += 1
+
+        let newFilmElo: Double
+        let newOppElo: Double
+        if filmWon {
+            (newFilmElo, newOppElo) = ELOService.newRatings(winnerRating: filmElo, loserRating: oppItem.eloScore)
+        } else {
+            (newOppElo, newFilmElo) = ELOService.newRatings(winnerRating: oppItem.eloScore, loserRating: filmElo)
+        }
+        filmElo = newFilmElo
+
+        do {
+            try await SupabaseClient.shared.from("ranked_items").upsert([
+                "user_id": userID.uuidString, "tmdb_id": String(film.id),
+                "media_type": film.mediaType.rawValue, "elo_score": String(filmElo),
+            ]).execute()
+            try await SupabaseClient.shared.from("ranked_items").upsert([
+                "user_id": userID.uuidString, "tmdb_id": String(oppItem.tmdbID),
+                "media_type": oppItem.mediaType.rawValue, "elo_score": String(newOppElo),
+            ]).execute()
+            try await SupabaseClient.shared.from("elo_matches").insert([
+                "user_id": userID.uuidString,
+                "winner_tmdb_id": String(filmWon ? film.id : oppItem.tmdbID),
+                "loser_tmdb_id": String(filmWon ? oppItem.tmdbID : film.id),
+                "media_type": film.mediaType.rawValue,
+            ]).execute()
+        } catch {}
+
+        let idx = min((lo + hi) / 2, bucketItems.count - 1)
+        if filmWon { hi = idx } else { lo = idx + 1 }
+        if lo >= hi || comparisonCount >= 4 {
+            await finish()
+        } else {
+            await loadOpponent()
+        }
+    }
+
+    func tooTough() async {
+        guard tooToughAvailable else { return }
+        tooToughTick += 1
+        await finish()
+    }
+
+    private func finish() async {
+        rankedTick += 1
+        lastPosition = lo + 1
+        lastBucketSize = bucketItems.count + 1
+        stage = .ranked
     }
 }
 
 // MARK: - RankingView
 
 struct RankingView: View {
+    let film: MediaItem
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
-    @State private var vm = RankingViewModel()
+    @State private var vm: RankingViewModel
+
+    init(film: MediaItem) {
+        self.film = film
+        _vm = State(initialValue: RankingViewModel(film: film))
+    }
 
     var body: some View {
         ZStack {
             CinemaTheme.Colors.background.ignoresSafeArea()
 
-            if vm.isLoading {
-                ProgressView().tint(CinemaTheme.Colors.gold).scaleEffect(1.5)
-            } else if let pair = vm.currentPair {
-                BattleView(pair: pair) { winner, loser in
-                    Task { await vm.choose(winner: winner, loser: loser, userID: appState.currentUser?.id) }
+            Group {
+                switch vm.stage {
+                case .rate:
+                    RateItView(film: film) { bucket in
+                        Task { await vm.chooseBucket(bucket, userID: appState.currentUser?.id) }
+                    }
+                case .loadingOpponent:
+                    ProgressView().tint(CinemaTheme.Colors.gold).scaleEffect(1.5)
+                case .compare:
+                    if let opponent = vm.opponent, let bucket = vm.chosenBucket {
+                        BattleView(
+                            left: opponent, right: film, bucketColor: bucket.color,
+                            tooToughAvailable: vm.tooToughAvailable,
+                            onPick: { side in
+                                Task { await vm.choose(filmWon: side == .right, userID: appState.currentUser?.id) }
+                            },
+                            onTooTough: {
+                                Task { await vm.tooTough() }
+                            }
+                        )
+                    }
+                case .ranked:
+                    RankedResultView(
+                        film: film, position: vm.lastPosition, bucketSize: vm.lastBucketSize,
+                        bucketLabel: vm.chosenBucket?.label ?? ""
+                    ) { dismiss() }
                 }
-            } else {
-                EmptyRankingView()
             }
 
-            // Top bar
             VStack {
                 HStack {
                     Button { dismiss() } label: {
@@ -175,146 +241,147 @@ struct RankingView: View {
                             .clipShape(Circle())
                     }
                     Spacer()
-                    Text("This or That")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                    Spacer()
-                    Text("\(vm.totalBattles)")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                        .frame(width: 40)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 56)
-
-                // Flash
-                if let flash = vm.flashMessage {
-                    Text(flash)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(CinemaTheme.Colors.gold)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(Color.black.opacity(0.75))
-                        .clipShape(Capsule())
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                        .padding(.top, 12)
-                }
-
                 Spacer()
             }
         }
-        .task { await vm.loadNextPair(userID: appState.currentUser?.id) }
     }
 }
 
-// MARK: - Battle View
+// MARK: - Rate It (bucket triage)
+
+private struct RateItView: View {
+    let film: MediaItem
+    let onPick: (RankBucket) -> Void
+    @State private var selected: RankBucket?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 20)
+
+            HStack(spacing: 12) {
+                PosterImage(path: film.posterPath, cornerRadius: 8).frame(width: 56, height: 84)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(film.title).font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
+                    Text("Marked as watched").font(.system(size: 13)).foregroundStyle(.white.opacity(0.55))
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 24)
+
+            Spacer()
+
+            Text("How was it?")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.bottom, 40)
+
+            HStack(spacing: 0) {
+                ForEach(RankBucket.allCases, id: \.self) { bucket in
+                    Button {
+                        selected = bucket
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { onPick(bucket) }
+                    } label: {
+                        VStack(spacing: 12) {
+                            Circle()
+                                .fill(bucket.color)
+                                .frame(width: 76, height: 76)
+                                .overlay(Circle().strokeBorder(.white, lineWidth: selected == bucket ? 2 : 0))
+                                .scaleEffect(selected == bucket ? 1.08 : 1.0)
+                            Text(bucket.label)
+                                .font(.system(size: 13))
+                                .foregroundStyle(.white.opacity(0.75))
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .animation(.spring(duration: 0.25), value: selected)
+                }
+            }
+            .padding(.horizontal, 20)
+
+            Spacer()
+            Spacer()
+        }
+    }
+}
+
+// MARK: - Battle View (tap-to-pick duel)
 
 private struct BattleView: View {
-    let pair: (MediaItem, MediaItem)
-    let onChoose: (MediaItem, MediaItem) -> Void
+    let left: MediaItem
+    let right: MediaItem
+    let bucketColor: Color
+    let tooToughAvailable: Bool
+    let onPick: (RankingDuelSide) -> Void
+    let onTooTough: () -> Void
 
-    @State private var dragTranslation: CGFloat = 0
-    @State private var winnerStartSide: RankingDuelSide?
-    @State private var thresholdCrossed = false
-    @State private var pulseSide: RankingDuelSide?
+    @State private var winnerSide: RankingDuelSide?
+    @State private var committedProgress: CGFloat = 0
     @State private var commitTick = 0
-
-    private let commitProgress: CGFloat = 0.6
 
     var body: some View {
         GeometryReader { geo in
             let halfWidth = geo.size.width / 2
-            let progress = revealProgress(travel: halfWidth)
-
             ZStack {
                 HStack(spacing: 0) {
-                    posterSide(.left, item: pair.0, geo: geo, progress: progress, travel: halfWidth)
-                    posterSide(.right, item: pair.1, geo: geo, progress: progress, travel: halfWidth)
+                    posterSide(.left, item: left, geo: geo, travel: halfWidth)
+                    posterSide(.right, item: right, geo: geo, travel: halfWidth)
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
-                .ignoresSafeArea()
 
-                VStack(spacing: 26) {
-                    Image(systemName: "arrow.left.arrow.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(CinemaTheme.Colors.gold)
-                    Circle()
-                        .strokeBorder(CinemaTheme.Colors.gold.opacity(0.8), lineWidth: 1)
-                        .background(Circle().fill(CinemaTheme.Colors.background.opacity(0.6)))
-                        .frame(width: 30, height: 30)
-                        .overlay(
-                            Text("vs")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(CinemaTheme.Colors.gold)
-                        )
+                Text("Which do you prefer?")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.7), radius: 8)
+                    .opacity(winnerSide == nil ? 1 : 0)
+                    .padding(.top, 66)
+                    .frame(maxHeight: .infinity, alignment: .top)
+
+                Button(action: onTooTough) {
+                    Text("Too tough")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(tooToughAvailable ? 0.9 : 0.25))
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 20)
+                        .background(.ultraThinMaterial.opacity(tooToughAvailable ? 1 : 0.4))
+                        .clipShape(Capsule())
                 }
-                .opacity(1 - progress)
+                .disabled(!tooToughAvailable)
+                .opacity(winnerSide == nil ? 1 : 0)
+                .padding(.bottom, 28)
+                .frame(maxHeight: .infinity, alignment: .bottom)
             }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 8)
-                    .onChanged { value in
-                        if winnerStartSide == nil {
-                            winnerStartSide = value.startLocation.x < halfWidth ? .left : .right
-                        }
-                        dragTranslation = value.translation.width
-                        let p = revealProgress(travel: halfWidth)
-                        let crossed = p > commitProgress
-                        if crossed != thresholdCrossed { thresholdCrossed = crossed }
-                    }
-                    .onEnded { _ in
-                        let p = revealProgress(travel: halfWidth)
-                        if p > commitProgress, let winner = winnerStartSide {
-                            commitPick(winner)
-                        } else {
-                            withAnimation(.spring(duration: 0.35)) { dragTranslation = 0 }
-                            thresholdCrossed = false
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                                winnerStartSide = nil
-                            }
-                        }
-                    }
-            )
         }
         .ignoresSafeArea()
-        .sensoryFeedback(.selection, trigger: thresholdCrossed)
         .sensoryFeedback(.impact(weight: .medium), trigger: commitTick)
-        .id("\(pair.0.id)-\(pair.1.id)")
-    }
-
-    private func revealProgress(travel: CGFloat) -> CGFloat {
-        guard let winnerStartSide else { return 0 }
-        let signed = winnerStartSide == .left ? dragTranslation : -dragTranslation
-        return max(0, min(1, signed / travel))
+        .id("\(left.id)-\(right.id)")
     }
 
     @ViewBuilder
-    private func posterSide(_ side: RankingDuelSide, item: MediaItem, geo: GeometryProxy, progress: CGFloat, travel: CGFloat) -> some View {
-        let isWinner = winnerStartSide == side
-        let isLoser = winnerStartSide != nil && winnerStartSide != side
+    private func posterSide(_ side: RankingDuelSide, item: MediaItem, geo: GeometryProxy, travel: CGFloat) -> some View {
+        let isWinner = winnerSide == side
+        let isLoser = winnerSide != nil && winnerSide != side
 
-        let base = RealPosterSide(item: item, isPulsing: pulseSide == side)
+        let base = RealPosterSide(item: item, isPulsing: false)
             .frame(width: geo.size.width / 2)
+            .contentShape(Rectangle())
+            .onTapGesture { commit(side) }
 
         DiagonalOverarchWinEffect.apply(base, .init(
-            isWinner: isWinner,
-            isLoser: isLoser,
-            side: side,
-            progress: progress,
-            travel: travel
+            isWinner: isWinner, isLoser: isLoser, side: side,
+            progress: committedProgress, travel: travel
         ))
-        .animation(.easeOut(duration: 0.15), value: progress)
     }
 
-    private func commitPick(_ side: RankingDuelSide) {
-        pulseSide = side
+    private func commit(_ side: RankingDuelSide) {
+        guard winnerSide == nil else { return }
+        winnerSide = side
         commitTick += 1
-        withAnimation(.spring(duration: 0.4, bounce: 0.3)) { dragTranslation = 0 }
-        thresholdCrossed = false
-        let winner = side == .left ? pair.0 : pair.1
-        let loser = side == .left ? pair.1 : pair.0
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            onChoose(winner, loser)
+        withAnimation(.spring(duration: 0.45, bounce: 0.25)) { committedProgress = 1 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            onPick(side)
         }
     }
 }
@@ -389,17 +456,41 @@ private struct RealPosterSide: View {
     }
 }
 
-private struct EmptyRankingView: View {
+// MARK: - Ranked Result
+
+private struct RankedResultView: View {
+    let film: MediaItem
+    let position: Int
+    let bucketSize: Int
+    let bucketLabel: String
+    let onDone: () -> Void
+
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "film.stack")
-                .font(.system(size: 52))
-                .foregroundStyle(CinemaTheme.Colors.textSecondary)
-            Text("Search for films to start ranking")
-                .font(.system(size: 17))
-                .foregroundStyle(CinemaTheme.Colors.textSecondary)
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(CinemaTheme.Colors.gold)
+            Text("\(film.title) ranked!")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+            Text("#\(position) of \(bucketSize) in \"\(bucketLabel)\"")
+                .font(.system(size: 15))
+                .foregroundStyle(.white.opacity(0.6))
+            Spacer()
+            Button(action: onDone) {
+                Text("Done")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(CinemaTheme.Colors.background)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(CinemaTheme.Colors.gold)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 40)
         }
-        .padding(40)
     }
 }

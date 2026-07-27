@@ -8,25 +8,8 @@ private struct MockFilm: Identifiable, Equatable {
     let color: Color
 }
 
-private enum RankBucket: CaseIterable {
-    case liked, okay, disliked
-
-    var label: String {
-        switch self {
-        case .liked: "Liked it"
-        case .okay: "It was fine"
-        case .disliked: "Didn't like it"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .liked: Color(red: 0.39, green: 0.6, blue: 0.13)
-        case .okay: Color(red: 0.73, green: 0.46, blue: 0.09)
-        case .disliked: Color(red: 0.64, green: 0.18, blue: 0.18)
-        }
-    }
-}
+// RankBucket (liked/okay/disliked) now lives in RankingView.swift — the real
+// implementation this prototype validated. Reused here rather than duplicated.
 
 private let unratedPool: [MockFilm] = [
     MockFilm(title: "Past Lives", color: Color(red: 0.23, green: 0.14, blue: 0.20)),
