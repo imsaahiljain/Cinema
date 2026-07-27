@@ -27,6 +27,7 @@ struct RankedItem: Identifiable, Codable {
     var rankPosition: Int?
     var watchedWith: [UUID]?
     var watchedDate: String?
+    var isPrivate: Bool = false
     let addedAt: Date
     let updatedAt: Date
 
@@ -39,6 +40,7 @@ struct RankedItem: Identifiable, Codable {
         case rankPosition = "rank_position"
         case watchedWith = "watched_with"
         case watchedDate = "watched_date"
+        case isPrivate = "is_private"
         case addedAt = "added_at"
         case updatedAt = "updated_at"
     }

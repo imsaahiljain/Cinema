@@ -41,6 +41,7 @@ create table public.ranked_items (
   rank_position integer,
   watched_with  uuid[],
   watched_date  date,
+  is_private    boolean not null default false,
   added_at      timestamptz not null default now(),
   updated_at    timestamptz not null default now(),
   unique (user_id, tmdb_id, media_type)
