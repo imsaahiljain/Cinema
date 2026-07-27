@@ -203,7 +203,7 @@ struct MovieInfoView: View {
         .sheet(isPresented: $showAddToList) {
             AddToListSheet(tmdbID: film.id, mediaType: film.mediaType, title: film.title, posterPath: film.posterPath, userID: appState.currentUser?.id)
         }
-        .fullScreenCover(isPresented: $showRanking, onDismiss: {
+        .sheet(isPresented: $showRanking, onDismiss: {
             Task { await vm.load(film: film, currentUserID: appState.currentUser?.id) }
         }) {
             RankingView(film: film)
@@ -458,7 +458,7 @@ struct MovieInfoView: View {
                 pillButton(title: "Add to List", systemImage: "bookmark") {
                     showAddToList = true
                 }
-                pillButton(title: "Rank", systemImage: "arrow.up.arrow.down") {
+                pillButton(title: "Your Take", systemImage: "quote.bubble") {
                     showRanking = true
                 }
             }

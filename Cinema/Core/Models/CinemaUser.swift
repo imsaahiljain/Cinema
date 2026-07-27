@@ -25,6 +25,8 @@ struct RankedItem: Identifiable, Codable {
     let mediaType: MediaType
     var eloScore: Double
     var rankPosition: Int?
+    var watchedWith: [UUID]?
+    var watchedDate: String?
     let addedAt: Date
     let updatedAt: Date
 
@@ -35,6 +37,8 @@ struct RankedItem: Identifiable, Codable {
         case mediaType = "media_type"
         case eloScore = "elo_score"
         case rankPosition = "rank_position"
+        case watchedWith = "watched_with"
+        case watchedDate = "watched_date"
         case addedAt = "added_at"
         case updatedAt = "updated_at"
     }

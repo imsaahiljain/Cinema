@@ -211,7 +211,7 @@ struct ListsView: View {
                 }
             }
         }
-        .fullScreenCover(item: $rankingFilm, onDismiss: {
+        .sheet(item: $rankingFilm, onDismiss: {
             Task { await vm.loadWatched(userID: appState.currentUser?.id) }
         }) { film in
             RankingView(film: film)

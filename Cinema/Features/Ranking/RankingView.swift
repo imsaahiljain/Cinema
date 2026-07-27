@@ -55,7 +55,29 @@ enum RankBucket: CaseIterable {
 @Observable
 @MainActor
 final class RankingViewModel {
-    enum Stage { case rate, loadingOpponent, compare, ranked }
+    enum Stage { case rate, details, loadingOpponent, compare, ranked }
+
+    enum WatchDateOption: CaseIterable, Hashable {
+        case today, yesterday, twoDaysAgo
+
+        var label: String {
+            switch self {
+            case .today: "Today"
+            case .yesterday: "Yesterday"
+            case .twoDaysAgo: "2 days ago"
+            }
+        }
+
+        var date: Date {
+            let cal = Calendar.current
+            let startOfToday = cal.startOfDay(for: Date())
+            switch self {
+            case .today: return startOfToday
+            case .yesterday: return cal.date(byAdding: .day, value: -1, to: startOfToday) ?? startOfToday
+            case .twoDaysAgo: return cal.date(byAdding: .day, value: -2, to: startOfToday) ?? startOfToday
+            }
+        }
+    }
 
     let film: MediaItem
     var stage: Stage = .rate
@@ -63,6 +85,10 @@ final class RankingViewModel {
     var opponent: MediaItem?
     var lastPosition = 1
     var lastBucketSize = 1
+
+    var friends: [CinemaUser] = []
+    var selectedFriendIDs: Set<UUID> = []
+    var selectedDateOption: WatchDateOption = .today
 
     // Only offer "Too tough" once narrowing has nearly converged — accepting the
     // midpoint early would throw away real information, not just skip a hard call.
@@ -84,9 +110,38 @@ final class RankingViewModel {
     }
 
     func chooseBucket(_ bucket: RankBucket, userID: UUID?) async {
-        guard let userID else { return }
         chosenBucket = bucket
         filmElo = bucket.startingElo
+        withAnimation(.easeInOut(duration: 0.25)) { stage = .details }
+        await loadFriends(userID: userID)
+    }
+
+    private func loadFriends(userID: UUID?) async {
+        guard let userID else { return }
+        struct FollowEdge: Decodable {
+            let followingID: UUID
+            enum CodingKeys: String, CodingKey { case followingID = "following_id" }
+        }
+        do {
+            let edges: [FollowEdge] = try await SupabaseClient.shared
+                .from("follows").select("following_id").eq("follower_id", value: userID)
+                .execute().value
+            guard !edges.isEmpty else { friends = []; return }
+            let profiles: [CinemaUser] = try await SupabaseClient.shared
+                .from("users").select().in("id", values: edges.map { $0.followingID.uuidString })
+                .execute().value
+            friends = profiles
+        } catch {
+            friends = []
+        }
+    }
+
+    func toggleFriend(_ id: UUID) {
+        if selectedFriendIDs.contains(id) { selectedFriendIDs.remove(id) } else { selectedFriendIDs.insert(id) }
+    }
+
+    func proceedToRanking(userID: UUID?) async {
+        guard let userID, let bucket = chosenBucket else { return }
 
         do {
             var query = SupabaseClient.shared
@@ -97,20 +152,35 @@ final class RankingViewModel {
                 .neq("tmdb_id", value: film.id)
             if bucket.lowerBound.isFinite { query = query.gte("elo_score", value: bucket.lowerBound) }
             if bucket.upperBound.isFinite { query = query.lt("elo_score", value: bucket.upperBound) }
-            let items: [RankedItem] = try await query
-                .order("elo_score", ascending: false)
-                .execute().value
-            bucketItems = items
+            bucketItems = try await query.order("elo_score", ascending: false).execute().value
         } catch {
             bucketItems = []
         }
 
+        struct SeedUpsert: Encodable {
+            let user_id: String
+            let tmdb_id: String
+            let media_type: String
+            let elo_score: String
+            let watched_with: [String]?
+            let watched_date: String?
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let watchedWith = selectedFriendIDs.map { $0.uuidString }
         do {
-            try await SupabaseClient.shared.from("ranked_items").upsert([
-                "user_id": userID.uuidString, "tmdb_id": String(film.id),
-                "media_type": film.mediaType.rawValue, "elo_score": String(filmElo),
-            ]).execute()
-        } catch {}
+            try await SupabaseClient.shared.from("ranked_items").upsert(
+                SeedUpsert(
+                    user_id: userID.uuidString, tmdb_id: String(film.id),
+                    media_type: film.mediaType.rawValue, elo_score: String(filmElo),
+                    watched_with: watchedWith.isEmpty ? nil : watchedWith,
+                    watched_date: formatter.string(from: selectedDateOption.date)
+                ),
+                onConflict: "user_id,tmdb_id,media_type"
+            ).execute()
+        } catch {
+            Log.ranking.error("Seed upsert failed: \(String(describing: error), privacy: .public)")
+        }
 
         lo = 0; hi = bucketItems.count; comparisonCount = 0
         if bucketItems.isEmpty {
@@ -148,18 +218,20 @@ final class RankingViewModel {
             try await SupabaseClient.shared.from("ranked_items").upsert([
                 "user_id": userID.uuidString, "tmdb_id": String(film.id),
                 "media_type": film.mediaType.rawValue, "elo_score": String(filmElo),
-            ]).execute()
+            ], onConflict: "user_id,tmdb_id,media_type").execute()
             try await SupabaseClient.shared.from("ranked_items").upsert([
                 "user_id": userID.uuidString, "tmdb_id": String(oppItem.tmdbID),
                 "media_type": oppItem.mediaType.rawValue, "elo_score": String(newOppElo),
-            ]).execute()
+            ], onConflict: "user_id,tmdb_id,media_type").execute()
             try await SupabaseClient.shared.from("elo_matches").insert([
                 "user_id": userID.uuidString,
                 "winner_tmdb_id": String(filmWon ? film.id : oppItem.tmdbID),
                 "loser_tmdb_id": String(filmWon ? oppItem.tmdbID : film.id),
                 "media_type": film.mediaType.rawValue,
             ]).execute()
-        } catch {}
+        } catch {
+            Log.ranking.error("Choose upsert failed: \(String(describing: error), privacy: .public)")
+        }
 
         let idx = min((lo + hi) / 2, bucketItems.count - 1)
         if filmWon { hi = idx } else { lo = idx + 1 }
@@ -191,6 +263,7 @@ struct RankingView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var vm: RankingViewModel
+    @State private var selectedDetent: PresentationDetent = .height(380)
 
     init(film: MediaItem) {
         self.film = film
@@ -198,29 +271,49 @@ struct RankingView: View {
     }
 
     var body: some View {
-        ZStack {
-            CinemaTheme.Colors.background.ignoresSafeArea()
+        VStack(spacing: 0) {
+            SheetHeaderRow(film: film) { dismiss() }
 
             Group {
                 switch vm.stage {
                 case .rate:
-                    RateItView(film: film) { bucket in
+                    RateItView { bucket in
                         Task { await vm.chooseBucket(bucket, userID: appState.currentUser?.id) }
                     }
+                case .details:
+                    if let bucket = vm.chosenBucket {
+                        DetailsView(
+                            bucket: bucket,
+                            friends: vm.friends,
+                            selectedFriendIDs: vm.selectedFriendIDs,
+                            selectedDateOption: vm.selectedDateOption,
+                            onToggleFriend: { vm.toggleFriend($0) },
+                            onSelectDate: { vm.selectedDateOption = $0 },
+                            onContinue: { Task { await vm.proceedToRanking(userID: appState.currentUser?.id) } }
+                        )
+                    }
                 case .loadingOpponent:
-                    ProgressView().tint(CinemaTheme.Colors.gold).scaleEffect(1.5)
+                    VStack {
+                        Spacer()
+                        ProgressView().tint(CinemaTheme.Colors.gold).scaleEffect(1.3)
+                        Spacer()
+                    }
                 case .compare:
                     if let opponent = vm.opponent, let bucket = vm.chosenBucket {
-                        BattleView(
-                            left: opponent, right: film, bucketColor: bucket.color,
-                            tooToughAvailable: vm.tooToughAvailable,
-                            onPick: { side in
-                                Task { await vm.choose(filmWon: side == .right, userID: appState.currentUser?.id) }
-                            },
-                            onTooTough: {
-                                Task { await vm.tooTough() }
-                            }
-                        )
+                        VStack(spacing: 10) {
+                            HowWasItSummary(bucket: bucket).padding(.horizontal, 20)
+                            BattleView(
+                                left: opponent, right: film, bucketColor: bucket.color,
+                                tooToughAvailable: vm.tooToughAvailable,
+                                onPick: { side in
+                                    Task { await vm.choose(filmWon: side == .right, userID: appState.currentUser?.id) }
+                                },
+                                onTooTough: {
+                                    Task { await vm.tooTough() }
+                                }
+                            )
+                            .frame(maxHeight: .infinity)
+                        }
                     }
                 case .ranked:
                     RankedResultView(
@@ -229,23 +322,80 @@ struct RankingView: View {
                     ) { dismiss() }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(CinemaTheme.Colors.background)
+        .presentationDetents([.height(380), .height(600), .large], selection: $selectedDetent)
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(24)
+        .presentationBackground(CinemaTheme.Colors.background)
+        .onChange(of: vm.stage) { _, newStage in
+            withAnimation(.easeInOut(duration: 0.3)) { selectedDetent = detent(for: newStage) }
+        }
+    }
 
-            VStack {
-                HStack {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                            .frame(width: 40, height: 40)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 56)
-                Spacer()
+    private func detent(for stage: RankingViewModel.Stage) -> PresentationDetent {
+        switch stage {
+        case .rate, .ranked: .height(380)
+        case .details: .height(600)
+        case .loadingOpponent, .compare: .large
+        }
+    }
+}
+
+// MARK: - Sheet Header (persists across every stage)
+
+private struct SheetHeaderRow: View {
+    let film: MediaItem
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            PosterImage(path: film.posterPath, cornerRadius: 6).frame(width: 36, height: 54)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(film.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text("Marked as watched")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.5))
             }
+            Spacer()
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .frame(width: 32, height: 32)
+                    .background(CinemaTheme.Colors.surface)
+                    .clipShape(Circle())
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .padding(.bottom, 6)
+    }
+}
+
+// MARK: - How Was It (compact summary shown on later stages)
+
+private struct HowWasItSummary: View {
+    let bucket: RankBucket
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(bucket.color)
+                .frame(width: 26, height: 26)
+                .overlay(
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                )
+            Text(bucket.label)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white.opacity(0.85))
+            Spacer()
         }
     }
 }
@@ -253,30 +403,17 @@ struct RankingView: View {
 // MARK: - Rate It (bucket triage)
 
 private struct RateItView: View {
-    let film: MediaItem
     let onPick: (RankBucket) -> Void
     @State private var selected: RankBucket?
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 20)
-
-            HStack(spacing: 12) {
-                PosterImage(path: film.posterPath, cornerRadius: 8).frame(width: 56, height: 84)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(film.title).font(.system(size: 17, weight: .semibold)).foregroundStyle(.white)
-                    Text("Marked as watched").font(.system(size: 13)).foregroundStyle(.white.opacity(0.55))
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 24)
-
             Spacer()
 
             Text("How was it?")
-                .font(.system(size: 24, weight: .semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
-                .padding(.bottom, 40)
+                .padding(.bottom, 32)
 
             HStack(spacing: 0) {
                 ForEach(RankBucket.allCases, id: \.self) { bucket in
@@ -284,14 +421,14 @@ private struct RateItView: View {
                         selected = bucket
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { onPick(bucket) }
                     } label: {
-                        VStack(spacing: 12) {
+                        VStack(spacing: 10) {
                             Circle()
                                 .fill(bucket.color)
-                                .frame(width: 76, height: 76)
+                                .frame(width: 64, height: 64)
                                 .overlay(Circle().strokeBorder(.white, lineWidth: selected == bucket ? 2 : 0))
                                 .scaleEffect(selected == bucket ? 1.08 : 1.0)
                             Text(bucket.label)
-                                .font(.system(size: 13))
+                                .font(.system(size: 12))
                                 .foregroundStyle(.white.opacity(0.75))
                         }
                         .frame(maxWidth: .infinity)
@@ -302,8 +439,102 @@ private struct RateItView: View {
             .padding(.horizontal, 20)
 
             Spacer()
-            Spacer()
         }
+    }
+}
+
+// MARK: - Details (who with + when — collapses away once ranking starts)
+
+private struct DetailsView: View {
+    let bucket: RankBucket
+    let friends: [CinemaUser]
+    let selectedFriendIDs: Set<UUID>
+    let selectedDateOption: RankingViewModel.WatchDateOption
+    let onToggleFriend: (UUID) -> Void
+    let onSelectDate: (RankingViewModel.WatchDateOption) -> Void
+    let onContinue: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            HowWasItSummary(bucket: bucket)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Who did you watch it with?")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                if friends.isEmpty {
+                    Text("Follow friends to tag them here.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.4))
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(friends) { friend in
+                                friendChip(friend)
+                            }
+                        }
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("When did you watch it?")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                HStack(spacing: 8) {
+                    ForEach(RankingViewModel.WatchDateOption.allCases, id: \.self) { option in
+                        Button { onSelectDate(option) } label: {
+                            Text(option.label)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(selectedDateOption == option ? CinemaTheme.Colors.background : .white.opacity(0.8))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(selectedDateOption == option ? CinemaTheme.Colors.gold : CinemaTheme.Colors.surface)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+            }
+
+            Spacer(minLength: 12)
+
+            Button(action: onContinue) {
+                Text("Rank it")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(CinemaTheme.Colors.background)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+                    .background(CinemaTheme.Colors.gold)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
+        .padding(.bottom, 20)
+    }
+
+    private func friendChip(_ friend: CinemaUser) -> some View {
+        let selected = selectedFriendIDs.contains(friend.id)
+        let initial = (friend.displayName ?? friend.username).first.map(String.init) ?? "?"
+        return Button { onToggleFriend(friend.id) } label: {
+            VStack(spacing: 6) {
+                Circle()
+                    .fill(CinemaTheme.Colors.surface)
+                    .frame(width: 48, height: 48)
+                    .overlay(
+                        Text(initial.uppercased())
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                    )
+                    .overlay(Circle().strokeBorder(CinemaTheme.Colors.gold, lineWidth: selected ? 2 : 0))
+                Text(friend.displayName ?? friend.username)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .lineLimit(1)
+                    .frame(width: 56)
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -335,11 +566,11 @@ private struct BattleView: View {
                 .frame(width: geo.size.width, height: geo.size.height)
 
                 Text("Which do you prefer?")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.7), radius: 8)
                     .opacity(pressedSide == nil ? 1 : 0)
-                    .padding(.top, 66)
+                    .padding(.top, 14)
                     .frame(maxHeight: .infinity, alignment: .top)
 
                 Button(action: onTooTough) {
@@ -353,11 +584,10 @@ private struct BattleView: View {
                 }
                 .disabled(!tooToughAvailable)
                 .opacity(pressedSide == nil ? 1 : 0)
-                .padding(.bottom, 28)
+                .padding(.bottom, 20)
                 .frame(maxHeight: .infinity, alignment: .bottom)
             }
         }
-        .ignoresSafeArea()
         .sensoryFeedback(.impact(weight: .medium), trigger: commitTick)
         .id("\(left.id)-\(right.id)")
     }
@@ -382,11 +612,6 @@ private struct BattleView: View {
     }
 }
 
-// One image per side, full stop — the old version layered a cropped, blurred
-// backdrop behind a separate poster card, which read as two competing pieces
-// of art (and the backdrop, built for 16:9, only ever showed a random sliver
-// once squeezed into a half-screen-wide column). Just the poster now, sized to
-// stay fully legible, on the app's own quiet surface color — no second image.
 // Just the card — no title/year underneath. Matches the rest of the app's own
 // poster grids (Search dropped captions the same way), and matches how Beli's
 // own compare cards carry nothing but the identifying content itself.
@@ -424,10 +649,10 @@ private struct RankedResultView: View {
         VStack(spacing: 16) {
             Spacer()
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 48))
+                .font(.system(size: 44))
                 .foregroundStyle(CinemaTheme.Colors.gold)
             Text("\(film.title) ranked!")
-                .font(.system(size: 24, weight: .semibold))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
@@ -440,12 +665,12 @@ private struct RankedResultView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(CinemaTheme.Colors.background)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, 15)
                     .background(CinemaTheme.Colors.gold)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .padding(.horizontal, 24)
-            .padding(.bottom, 40)
+            .padding(.bottom, 20)
         }
     }
 }

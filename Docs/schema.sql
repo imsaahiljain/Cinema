@@ -39,6 +39,8 @@ create table public.ranked_items (
   media_type    text not null check (media_type in ('movie', 'tv')),
   elo_score     numeric not null default 1000,
   rank_position integer,
+  watched_with  uuid[],
+  watched_date  date,
   added_at      timestamptz not null default now(),
   updated_at    timestamptz not null default now(),
   unique (user_id, tmdb_id, media_type)
