@@ -309,6 +309,10 @@ private struct RateItView: View {
 
 // MARK: - Battle View (tap-to-pick duel)
 
+// No "winner" animation — checked how Beli actually handles a pick (real screen
+// recording, frame-by-frame): it just cuts straight to the next comparison the
+// instant you tap. No slide, no overarch, no lingering celebration per pick.
+// A brief press-down on the tapped card is the only feedback before advancing.
 private struct BattleView: View {
     let left: MediaItem
     let right: MediaItem
@@ -317,18 +321,16 @@ private struct BattleView: View {
     let onPick: (RankingDuelSide) -> Void
     let onTooTough: () -> Void
 
-    @State private var winnerSide: RankingDuelSide?
-    @State private var committedProgress: CGFloat = 0
+    @State private var pressedSide: RankingDuelSide?
     @State private var commitTick = 0
 
     var body: some View {
         GeometryReader { geo in
-            let halfWidth = geo.size.width / 2
             ZStack {
                 HStack(spacing: 0) {
-                    posterSide(.left, item: left, geo: geo, travel: halfWidth)
+                    posterSide(.left, item: left)
                     Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1)
-                    posterSide(.right, item: right, geo: geo, travel: halfWidth)
+                    posterSide(.right, item: right)
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
 
@@ -336,7 +338,7 @@ private struct BattleView: View {
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.7), radius: 8)
-                    .opacity(winnerSide == nil ? 1 : 0)
+                    .opacity(pressedSide == nil ? 1 : 0)
                     .padding(.top, 66)
                     .frame(maxHeight: .infinity, alignment: .top)
 
@@ -350,7 +352,7 @@ private struct BattleView: View {
                         .clipShape(Capsule())
                 }
                 .disabled(!tooToughAvailable)
-                .opacity(winnerSide == nil ? 1 : 0)
+                .opacity(pressedSide == nil ? 1 : 0)
                 .padding(.bottom, 28)
                 .frame(maxHeight: .infinity, alignment: .bottom)
             }
@@ -361,27 +363,20 @@ private struct BattleView: View {
     }
 
     @ViewBuilder
-    private func posterSide(_ side: RankingDuelSide, item: MediaItem, geo: GeometryProxy, travel: CGFloat) -> some View {
-        let isWinner = winnerSide == side
-        let isLoser = winnerSide != nil && winnerSide != side
-
-        let base = RealPosterSide(item: item)
-            .frame(width: geo.size.width / 2)
+    private func posterSide(_ side: RankingDuelSide, item: MediaItem) -> some View {
+        RealPosterSide(item: item)
+            .frame(maxWidth: .infinity)
+            .scaleEffect(pressedSide == side ? 0.96 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: pressedSide)
             .contentShape(Rectangle())
             .onTapGesture { commit(side) }
-
-        DiagonalOverarchWinEffect.apply(base, .init(
-            isWinner: isWinner, isLoser: isLoser, side: side,
-            progress: committedProgress, travel: travel
-        ))
     }
 
     private func commit(_ side: RankingDuelSide) {
-        guard winnerSide == nil else { return }
-        winnerSide = side
+        guard pressedSide == nil else { return }
+        pressedSide = side
         commitTick += 1
-        withAnimation(.spring(duration: 0.45, bounce: 0.25)) { committedProgress = 1 }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             onPick(side)
         }
     }
@@ -392,6 +387,9 @@ private struct BattleView: View {
 // of art (and the backdrop, built for 16:9, only ever showed a random sliver
 // once squeezed into a half-screen-wide column). Just the poster now, sized to
 // stay fully legible, on the app's own quiet surface color — no second image.
+// Just the card — no title/year underneath. Matches the rest of the app's own
+// poster grids (Search dropped captions the same way), and matches how Beli's
+// own compare cards carry nothing but the identifying content itself.
 private struct RealPosterSide: View {
     let item: MediaItem
 
@@ -400,29 +398,13 @@ private struct RealPosterSide: View {
             ZStack {
                 CinemaTheme.Colors.surface
 
-                VStack(spacing: 14) {
-                    PosterImage(path: item.posterPath, cornerRadius: 14)
-                        .aspectRatio(2 / 3, contentMode: .fit)
-                        .frame(width: geo.size.width * 0.78)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
-                        )
-
-                    VStack(spacing: 3) {
-                        Text(item.title)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .padding(.horizontal, 14)
-                        if let year = item.releaseYear {
-                            Text(year)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.55))
-                        }
-                    }
-                }
+                PosterImage(path: item.posterPath, cornerRadius: 14)
+                    .aspectRatio(2 / 3, contentMode: .fit)
+                    .frame(width: geo.size.width * 0.82)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
+                    )
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
