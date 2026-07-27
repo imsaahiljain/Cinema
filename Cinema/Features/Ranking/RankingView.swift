@@ -327,6 +327,7 @@ private struct BattleView: View {
             ZStack {
                 HStack(spacing: 0) {
                     posterSide(.left, item: left, geo: geo, travel: halfWidth)
+                    Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1)
                     posterSide(.right, item: right, geo: geo, travel: halfWidth)
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
@@ -364,7 +365,7 @@ private struct BattleView: View {
         let isWinner = winnerSide == side
         let isLoser = winnerSide != nil && winnerSide != side
 
-        let base = RealPosterSide(item: item, isPulsing: false)
+        let base = RealPosterSide(item: item)
             .frame(width: geo.size.width / 2)
             .contentShape(Rectangle())
             .onTapGesture { commit(side) }
@@ -386,34 +387,35 @@ private struct BattleView: View {
     }
 }
 
+// One image per side, full stop — the old version layered a cropped, blurred
+// backdrop behind a separate poster card, which read as two competing pieces
+// of art (and the backdrop, built for 16:9, only ever showed a random sliver
+// once squeezed into a half-screen-wide column). Just the poster now, sized to
+// stay fully legible, on the app's own quiet surface color — no second image.
 private struct RealPosterSide: View {
     let item: MediaItem
-    let isPulsing: Bool
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                backdrop
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .clipped()
+                CinemaTheme.Colors.surface
 
-                Color.black.opacity(0.35)
-
-                VStack(spacing: 10) {
-                    PosterImage(path: item.posterPath, cornerRadius: 12)
-                        .frame(width: geo.size.width * 0.62, height: geo.size.width * 0.62 * 1.5)
+                VStack(spacing: 14) {
+                    PosterImage(path: item.posterPath, cornerRadius: 14)
+                        .aspectRatio(2 / 3, contentMode: .fit)
+                        .frame(width: geo.size.width * 0.78)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: 14)
                                 .strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
                         )
 
-                    VStack(spacing: 2) {
+                    VStack(spacing: 3) {
                         Text(item.title)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.white)
                             .multilineTextAlignment(.center)
                             .lineLimit(2)
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, 14)
                         if let year = item.releaseYear {
                             Text(year)
                                 .font(.system(size: 12, weight: .medium))
@@ -423,35 +425,6 @@ private struct RealPosterSide: View {
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
-        }
-        .overlay(
-            Rectangle()
-                .strokeBorder(CinemaTheme.Colors.gold.opacity(isPulsing ? 0.9 : 0), lineWidth: 3)
-        )
-        .scaleEffect(isPulsing ? 1.02 : 1.0)
-        .animation(.spring(duration: 0.3), value: isPulsing)
-    }
-
-    @ViewBuilder
-    private var backdrop: some View {
-        if let path = item.backdropPath, let url = TMDBClient.shared.backdropURL(path: path) {
-            AsyncImage(url: url) { phase in
-                if case .success(let image) = phase {
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } else {
-                    CinemaTheme.Colors.surface
-                }
-            }
-        } else if let path = item.posterPath, let url = TMDBClient.shared.posterURL(path: path) {
-            AsyncImage(url: url) { phase in
-                if case .success(let image) = phase {
-                    image.resizable().aspectRatio(contentMode: .fill).blur(radius: 18)
-                } else {
-                    CinemaTheme.Colors.surface
-                }
-            }
-        } else {
-            CinemaTheme.Colors.surface
         }
     }
 }
