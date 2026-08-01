@@ -119,6 +119,13 @@ final class RankingViewModel {
         if selectedFriendIDs.contains(id) { selectedFriendIDs.remove(id) } else { selectedFriendIDs.insert(id) }
     }
 
+    // Someone found via search rather than already followed — added to the same
+    // chip row, pre-selected, so there's no second UI for "people you searched for".
+    func addWatchedWithPerson(_ user: CinemaUser) {
+        if !friends.contains(where: { $0.id == user.id }) { friends.append(user) }
+        selectedFriendIDs.insert(user.id)
+    }
+
     func proceedToRanking(userID: UUID?) async {
         guard let userID, let bucket = chosenBucket else { return }
 
@@ -272,13 +279,18 @@ final class RankingViewModel {
 
 struct RankingView: View {
     let film: MediaItem
+    // Called (in addition to this view's own dismiss) when "Done" is tapped on the
+    // result screen — lets a presenter that's itself a modal (MovieInfoView) close
+    // too, so finishing a rank returns you to the tab you were on, not the poster.
+    var onFinished: (() -> Void)? = nil
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var vm: RankingViewModel
     @State private var selectedDetent: PresentationDetent = .height(380)
 
-    init(film: MediaItem) {
+    init(film: MediaItem, onFinished: (() -> Void)? = nil) {
         self.film = film
+        self.onFinished = onFinished
         _vm = State(initialValue: RankingViewModel(film: film))
     }
 
@@ -301,6 +313,7 @@ struct RankingView: View {
                             watchedDate: Binding(get: { vm.watchedDate }, set: { vm.watchedDate = $0 }),
                             isPrivate: Binding(get: { vm.isPrivate }, set: { vm.isPrivate = $0 }),
                             onToggleFriend: { vm.toggleFriend($0) },
+                            onAddPerson: { vm.addWatchedWithPerson($0) },
                             onContinue: { Task { await vm.proceedToRanking(userID: appState.currentUser?.id) } }
                         )
                     }
@@ -330,7 +343,10 @@ struct RankingView: View {
                 case .ranked:
                     RankedResultView(
                         film: film, position: vm.overallPosition, flavorText: vm.flavorText
-                    ) { dismiss() }
+                    ) {
+                        dismiss()
+                        onFinished?()
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -342,6 +358,11 @@ struct RankingView: View {
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(24)
         .presentationBackground(CinemaTheme.Colors.background)
+        // Small custom-height detents default to leaving the presenter still
+        // scrollable behind the sheet — that's very likely how a bright provider
+        // logo ended up positioned right behind the small "How was it" sheet in
+        // the first place. Lock the background while ranking is in progress.
+        .presentationBackgroundInteraction(.disabled)
         .onChange(of: vm.stage) { _, newStage in
             withAnimation(.easeInOut(duration: 0.3)) { selectedDetent = detent(for: newStage) }
         }
@@ -465,28 +486,44 @@ private struct DetailsView: View {
     @Binding var watchedDate: Date
     @Binding var isPrivate: Bool
     let onToggleFriend: (UUID) -> Void
+    let onAddPerson: (CinemaUser) -> Void
     let onContinue: () -> Void
+
+    @State private var showAddPerson = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             HowWasItSummary(bucket: bucket)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Who did you watch it with?")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                if friends.isEmpty {
-                    Text("Follow friends to tag them here.")
+                HStack(spacing: 6) {
+                    Image(systemName: "person.2.fill")
                         .font(.system(size: 13))
-                        .foregroundStyle(.white.opacity(0.4))
-                } else {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(friends) { friend in
-                                friendChip(friend)
+                        .foregroundStyle(.white.opacity(0.7))
+                    Text("Who did you watch it with?")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                HStack(spacing: 8) {
+                    if !friends.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(friends) { friend in
+                                    friendChip(friend)
+                                }
                             }
                         }
                     }
+                    Button { showAddPerson = true } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .frame(width: 36, height: 36)
+                            .background(CinemaTheme.Colors.surface)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    if friends.isEmpty { Spacer() }
                 }
             }
 
@@ -537,6 +574,12 @@ private struct DetailsView: View {
         .padding(.horizontal, 20)
         .padding(.top, 4)
         .padding(.bottom, 20)
+        .sheet(isPresented: $showAddPerson) {
+            AddPersonSheet(excludingIDs: Set(friends.map(\.id))) { user in
+                onAddPerson(user)
+                showAddPerson = false
+            }
+        }
     }
 
     private func friendChip(_ friend: CinemaUser) -> some View {
@@ -556,6 +599,120 @@ private struct DetailsView: View {
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Add Person (search anyone, not just already-followed friends)
+
+private struct AddPersonSheet: View {
+    let excludingIDs: Set<UUID>
+    let onPick: (CinemaUser) -> Void
+
+    @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    @State private var results: [CinemaUser] = []
+    @State private var searchTask: Task<Void, Never>?
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.6))
+                    TextField("Search by username...", text: $query)
+                        .font(.system(size: 16))
+                        .foregroundStyle(.white)
+                        .tint(CinemaTheme.Colors.gold)
+                        .autocorrectionDisabled()
+                        .focused($focused)
+                        .onChange(of: query) { _, _ in onQueryChange() }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 13)
+                .background(CinemaTheme.Colors.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 14)
+
+                if query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Spacer()
+                    Text("Search for a username to tag them.")
+                        .font(.system(size: 15))
+                        .foregroundStyle(.white.opacity(0.4))
+                    Spacer()
+                } else if results.isEmpty {
+                    Spacer()
+                    Text("No one found for \u{201C}\(query)\u{201D}")
+                        .font(.system(size: 15))
+                        .foregroundStyle(.white.opacity(0.4))
+                    Spacer()
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(results) { user in
+                                Button {
+                                    onPick(user)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Circle()
+                                            .fill(CinemaTheme.Colors.surface)
+                                            .frame(width: 40, height: 40)
+                                            .overlay(
+                                                Text((user.displayName ?? user.username).prefix(1).uppercased())
+                                                    .font(.system(size: 16, weight: .semibold))
+                                                    .foregroundStyle(.white)
+                                            )
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(user.displayName ?? user.username)
+                                                .font(.system(size: 15, weight: .semibold))
+                                                .foregroundStyle(.white)
+                                            Text("@\(user.username)")
+                                                .font(.system(size: 13))
+                                                .foregroundStyle(.white.opacity(0.5))
+                                        }
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 10)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
+            .background(CinemaTheme.Colors.background.ignoresSafeArea())
+            .navigationTitle("Add Someone")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundStyle(CinemaTheme.Colors.gold)
+                }
+            }
+            .onAppear { focused = true }
+        }
+    }
+
+    private func onQueryChange() {
+        searchTask?.cancel()
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { results = []; return }
+        searchTask = Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            let currentUserID = appState.currentUser?.id
+            let matches: [CinemaUser] = (try? await SupabaseClient.shared
+                .from("users").select()
+                .ilike("username", pattern: "%\(q.lowercased())%")
+                .limit(20).execute().value) ?? []
+            results = matches.filter { !excludingIDs.contains($0.id) && $0.id != currentUserID }
+        }
     }
 }
 

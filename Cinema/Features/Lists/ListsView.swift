@@ -197,6 +197,12 @@ struct ListsView: View {
                     }
                 }
             }
+
+            // Same reasoning as MovieInfoView — this page's cream background is
+            // even brighter than the system's own sheet dimming can mask on its own.
+            if rankingFilm != nil {
+                Color.black.opacity(0.82).ignoresSafeArea()
+            }
         }
         .task {
             async let a: () = vm.loadWatched(userID: appState.currentUser?.id)

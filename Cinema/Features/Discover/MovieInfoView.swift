@@ -190,6 +190,14 @@ struct MovieInfoView: View {
                 }
             }
 
+            // The system's own sheet dimming isn't dark enough over bright content
+            // (provider logos in Where to Watch have white/light backgrounds) — a
+            // small custom height detent leaves a lot of this page visible behind
+            // the Your Take sheet, so double up the darkening while it's up.
+            if showRanking {
+                Color.black.opacity(0.82).ignoresSafeArea()
+            }
+
             Button { dismiss() } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 30))
@@ -206,7 +214,7 @@ struct MovieInfoView: View {
         .sheet(isPresented: $showRanking, onDismiss: {
             Task { await vm.load(film: film, currentUserID: appState.currentUser?.id) }
         }) {
-            RankingView(film: film)
+            RankingView(film: film, onFinished: { dismiss() })
         }
         .sheet(item: $selectedFriend) { friend in
             NavigationStack { UserProfileView(user: friend) }

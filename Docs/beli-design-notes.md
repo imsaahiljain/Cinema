@@ -96,6 +96,16 @@ Confirmed directly (screenshots 224, 249 — previously this section only inferr
 
 Two affordances worth calling out because they're not just this app's polish, they're structural: **Undo** (a comparison can be walked back — nothing about pairwise rating is presented as irreversible) and **Too tough** (an explicit "no real preference" outcome distinct from skipping the pair entirely). Both are answers to a real problem any pairwise ranking system has — a forced binary choice with no escape hatch either corrupts the data (fake preference) or frustrates the user (no undo) — not cosmetic choices.
 
+### Motion/behavior, confirmed from a real screen recording (2026-07-27)
+
+The screenshots above only show static states. A user-supplied screen recording of the actual add-a-restaurant flow was frame-extracted to see the *motion* between them — the findings below came from that pass, and the recording itself is not needed again; the exact frames are saved in `Docs/beli-video-frames/` so this never has to be re-extracted.
+
+1. **Entry is a bottom sheet that grows, not a full-screen takeover.** Tapping the rank affordance on the restaurant detail page brings up a *small* card anchored to the bottom — just the place name/X header, "Add to my list of," and "How was it?" — with the detail page still visible and dimmed above it. See `01-before-sheet-baseline-page.png` → `02-sheet-appears-small.png`.
+2. **The card then expands on its own** to show the full form — "Who did you go with?", labels, notes, favorite dishes, photos, visit date, stealth mode, "Okay" button — filling most (not all) of the screen. See `03-sheet-expanded-full-fields.png`. This is the same growing-sheet behavior Popcorn's own redesigned "Your Take" flow now replicates (small → medium → large detents).
+3. **Once comparisons start, the detail form collapses away entirely** — the sheet shows only the compact "How was it" confirmation (checked bucket) plus "Which do you prefer?", no wasted space where the form used to be. See `04-compare-stage-fields-collapsed.png`.
+4. **There is no winner animation between picks — confirmed by dense frame sampling (0.26s intervals).** Between `05-instant-transition-before.png` (62.81s) and `06-instant-transition-after.png` (63.06s) the comparison pair changes completely with no in-between frame showing any slide, overarch, or celebration. It's an instant cut. This directly informed dropping Popcorn's `DiagonalOverarchWinEffect` from the real duel screen.
+5. **Finishing the rating flow returns to the restaurant's detail page**, where a native share sheet with Beli's own branded link-preview card (place name + score) appears. See `07-completion-returns-to-detail-page.png`. This reads as the natural "you're done" endpoint, not a separate confirmation screen.
+
 ---
 
 ## Search Screen
