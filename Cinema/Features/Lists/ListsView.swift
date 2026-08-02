@@ -149,6 +149,26 @@ final class ListsViewModel {
             listItems[item.listID]?.removeAll { $0.id == item.id }
         } catch {}
     }
+
+    /// Manual drag reorder. Keeps the same multiset of elo_score values —
+    /// just reassigns which film holds which score to match the new order —
+    /// rather than inventing new magnitudes that'd drift from the ELO scale
+    /// everything else (RankingView's K=32 battles) operates on.
+    func reorderWatched(from source: IndexSet, to destination: Int) {
+        let scoresDescending = rankedItems.map(\.eloScore).sorted(by: >)
+        rankedItems.move(fromOffsets: source, toOffset: destination)
+        for i in rankedItems.indices {
+            rankedItems[i].eloScore = scoresDescending[i]
+        }
+        let snapshot = rankedItems
+        Task {
+            let records = snapshot.map {
+                ["user_id": $0.userID.uuidString, "tmdb_id": String($0.tmdbID),
+                 "media_type": $0.mediaType.rawValue, "elo_score": String($0.eloScore)]
+            }
+            try? await SupabaseClient.shared.from("ranked_items").upsert(records).execute()
+        }
+    }
 }
 
 // Matches the existing 10-Movie Wall onboarding gate — by the time someone
@@ -176,6 +196,7 @@ struct ListsView: View {
     @State private var listPendingDelete: CustomList?
     @State private var watchlistEntryPendingDelete: WatchlistEntry?
     @State private var listItemPendingDelete: ListItem?
+    @State private var isReordering = false
     @AppStorage("cinema_dev_scores_unlocked") private var devScoresUnlocked = false
 
     var body: some View {
@@ -209,6 +230,9 @@ struct ListsView: View {
             async let b: () = vm.loadWatchlist(userID: appState.currentUser?.id)
             async let c: () = vm.loadCustomLists(userID: appState.currentUser?.id)
             _ = await (a, b, c)
+        }
+        .onChange(of: selection) {
+            if selection != .watched { isReordering = false }
         }
         .sheet(isPresented: $showCreateList) {
             CreateListSheet { name in
@@ -299,6 +323,21 @@ struct ListsView: View {
                 .padding(.trailing, 8)
             }
 
+            if selection == .watched {
+                Button {
+                    isReordering.toggle()
+                } label: {
+                    Image(systemName: isReordering ? "checkmark" : "line.3.horizontal")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(isReordering ? .white : WarmTheme.titleText)
+                        .frame(width: 36, height: 36)
+                        .background(isReordering ? WarmTheme.accent : WarmTheme.chipBackground)
+                        .clipShape(Circle())
+                }
+                .accessibilityLabel(isReordering ? "Done Reordering" : "Reorder Rankings")
+                .padding(.trailing, 8)
+            }
+
             Button {
                 showCreateList = true
             } label: {
@@ -338,31 +377,47 @@ struct ListsView: View {
             EmptyStateView(message: "Rank your first film to start your list.")
         } else {
             let unlocked = devScoresUnlocked || vm.rankedItems.count >= scoresUnlockThreshold
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    if !unlocked {
-                        ScoresLockedHint(rankedCount: vm.rankedItems.count, threshold: scoresUnlockThreshold)
-                    }
-                    ForEach(Array(vm.rankedItems.enumerated()), id: \.element.id) { index, item in
-                        PosterRow(
-                            rank: index + 1,
-                            media: vm.films[item.tmdbID],
-                            tmdbID: item.tmdbID
-                        ) {
-                            if unlocked {
-                                Text(String(format: "%.1f", ratingOutOf10(rankPosition: index + 1, totalRanked: vm.rankedItems.count)))
-                                    .font(WarmTheme.Font.bodyBold(13))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(WarmTheme.accent, in: RoundedRectangle(cornerRadius: 8))
-                            }
-                        }
-                        rowDivider(isLast: index == vm.rankedItems.count - 1)
-                    }
+            List {
+                if !unlocked {
+                    ScoresLockedHint(rankedCount: vm.rankedItems.count, threshold: scoresUnlockThreshold)
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
                 }
-                .padding(.bottom, 100)
+                ForEach(Array(vm.rankedItems.enumerated()), id: \.element.id) { index, item in
+                    PosterRow(
+                        rank: index + 1,
+                        media: vm.films[item.tmdbID],
+                        tmdbID: item.tmdbID
+                    ) {
+                        if unlocked {
+                            Text(String(format: "%.1f", ratingOutOf10(rankPosition: index + 1, totalRanked: vm.rankedItems.count)))
+                                .font(WarmTheme.Font.bodyBold(13))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(WarmTheme.accent, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                    .overlay(alignment: .bottom) {
+                        if index != vm.rankedItems.count - 1 {
+                            Rectangle().fill(WarmTheme.divider).frame(height: 1).padding(.leading, 20)
+                        }
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                }
+                .onMove { vm.reorderWatched(from: $0, to: $1) }
+
+                Color.clear.frame(height: 90)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .environment(\.editMode, .constant(isReordering ? .active : .inactive))
             .refreshable { await vm.loadWatched(userID: appState.currentUser?.id) }
         }
     }
