@@ -166,7 +166,20 @@ final class ListsViewModel {
                 ["user_id": $0.userID.uuidString, "tmdb_id": String($0.tmdbID),
                  "media_type": $0.mediaType.rawValue, "elo_score": String($0.eloScore)]
             }
-            try? await SupabaseClient.shared.from("ranked_items").upsert(records).execute()
+            do {
+                // ranked_items' primary key is `id`, not (user_id, tmdb_id, media_type) —
+                // without onConflict, PostgREST upserts against the primary key by
+                // default, and since these records don't carry an id, each row was
+                // silently attempted as a fresh insert and rejected by the separate
+                // unique constraint on (user_id, tmdb_id, media_type). Caught only by
+                // testing an actual app relaunch — the in-memory reorder looked
+                // persisted but a fresh load from Supabase reverted it every time.
+                try await SupabaseClient.shared.from("ranked_items")
+                    .upsert(records, onConflict: "user_id,tmdb_id,media_type")
+                    .execute()
+            } catch {
+                Log.ranking.error("Failed to persist manual reorder: \(error)")
+            }
         }
     }
 }
@@ -196,7 +209,8 @@ struct ListsView: View {
     @State private var listPendingDelete: CustomList?
     @State private var watchlistEntryPendingDelete: WatchlistEntry?
     @State private var listItemPendingDelete: ListItem?
-    @State private var isReordering = false
+    @State private var editMode: EditMode = .inactive
+    private var isReordering: Bool { editMode == .active }
     @AppStorage("cinema_dev_scores_unlocked") private var devScoresUnlocked = false
 
     var body: some View {
@@ -232,7 +246,7 @@ struct ListsView: View {
             _ = await (a, b, c)
         }
         .onChange(of: selection) {
-            if selection != .watched { isReordering = false }
+            if selection != .watched { editMode = .inactive }
         }
         .sheet(isPresented: $showCreateList) {
             CreateListSheet { name in
@@ -325,7 +339,7 @@ struct ListsView: View {
 
             if selection == .watched {
                 Button {
-                    isReordering.toggle()
+                    editMode = isReordering ? .inactive : .active
                 } label: {
                     Image(systemName: isReordering ? "checkmark" : "line.3.horizontal")
                         .font(.system(size: 16, weight: .bold))
@@ -417,7 +431,7 @@ struct ListsView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .environment(\.editMode, .constant(isReordering ? .active : .inactive))
+            .environment(\.editMode, $editMode)
             .refreshable { await vm.loadWatched(userID: appState.currentUser?.id) }
         }
     }
