@@ -404,13 +404,26 @@ struct ListsView: View {
                         media: vm.films[item.tmdbID],
                         tmdbID: item.tmdbID
                     ) {
-                        if unlocked {
-                            Text(String(format: "%.1f", ratingOutOf10(rankPosition: index + 1, totalRanked: vm.rankedItems.count)))
-                                .font(WarmTheme.Font.bodyBold(13))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(WarmTheme.accent, in: RoundedRectangle(cornerRadius: 8))
+                        HStack(spacing: 10) {
+                            if unlocked {
+                                Text(String(format: "%.1f", ratingOutOf10(rankPosition: index + 1, totalRanked: vm.rankedItems.count)))
+                                    .font(WarmTheme.Font.bodyBold(13))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(WarmTheme.accent, in: RoundedRectangle(cornerRadius: 8))
+                            }
+                            // Draws our own clearly-visible handle instead of relying on
+                            // List's native reorder icon, which renders in a pale system
+                            // gray that's nearly invisible against WarmTheme.background —
+                            // confirmed on a real device (2026-08-03), not just a simulator
+                            // quirk. The native drag gesture/hit-region is still what
+                            // actually moves the row; this is purely a visibility fix.
+                            if isReordering {
+                                Image(systemName: "line.3.horizontal")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(WarmTheme.titleText)
+                            }
                         }
                     }
                     .overlay(alignment: .bottom) {
