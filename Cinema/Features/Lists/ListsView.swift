@@ -413,12 +413,12 @@ struct ListsView: View {
                                     .padding(.vertical, 6)
                                     .background(WarmTheme.accent, in: RoundedRectangle(cornerRadius: 8))
                             }
-                            // Draws our own clearly-visible handle instead of relying on
-                            // List's native reorder icon, which renders in a pale system
-                            // gray that's nearly invisible against WarmTheme.background —
-                            // confirmed on a real device (2026-08-03), not just a simulator
-                            // quirk. The native drag gesture/hit-region is still what
-                            // actually moves the row; this is purely a visibility fix.
+                            // List's native reorder icon is hardcoded to a pale system
+                            // gray — confirmed .tint() has no effect on it (tested
+                            // 2026-08-03), Apple doesn't expose it to any public
+                            // modifier. This draws our own dark one instead; the native
+                            // one still technically renders further right but is faint
+                            // enough to be a non-issue next to this.
                             if isReordering {
                                 Image(systemName: "line.3.horizontal")
                                     .font(.system(size: 15, weight: .bold))
