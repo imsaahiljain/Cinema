@@ -404,26 +404,13 @@ struct ListsView: View {
                         media: vm.films[item.tmdbID],
                         tmdbID: item.tmdbID
                     ) {
-                        HStack(spacing: 10) {
-                            if unlocked {
-                                Text(String(format: "%.1f", ratingOutOf10(rankPosition: index + 1, totalRanked: vm.rankedItems.count)))
-                                    .font(WarmTheme.Font.bodyBold(13))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(WarmTheme.accent, in: RoundedRectangle(cornerRadius: 8))
-                            }
-                            // List's native reorder icon is hardcoded to a pale system
-                            // gray — confirmed .tint() has no effect on it (tested
-                            // 2026-08-03), Apple doesn't expose it to any public
-                            // modifier. This draws our own dark one instead; the native
-                            // one still technically renders further right but is faint
-                            // enough to be a non-issue next to this.
-                            if isReordering {
-                                Image(systemName: "line.3.horizontal")
-                                    .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(WarmTheme.titleText)
-                            }
+                        if unlocked {
+                            Text(String(format: "%.1f", ratingOutOf10(rankPosition: index + 1, totalRanked: vm.rankedItems.count)))
+                                .font(WarmTheme.Font.bodyBold(13))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(WarmTheme.accent, in: RoundedRectangle(cornerRadius: 8))
                         }
                     }
                     .overlay(alignment: .bottom) {
