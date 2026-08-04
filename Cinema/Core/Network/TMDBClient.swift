@@ -149,7 +149,15 @@ struct TMDBClient {
     /// the most-known title *within* the quality band, not the most obscure outlier; excluding
     /// Documentary/Music genres keeps concert films out; include_adult=false matches every other
     /// query in this file; the vote floor moved up from 100 to 300 for more reliable signal.
+    ///
+    /// That still let brand-new blockbusters (a just-released Spider-Man or Toy Story) through —
+    /// they're popular enough to shoot to the top of popularity.desc within days, but haven't
+    /// existed long enough to cross 1,000 votes yet, so the vote_count band caught them as a
+    /// false positive right as they briefly passed through it. primary_release_date.lte excludes
+    /// anything released in the last 60 days — past the 45-day "New" tag window with a buffer, so
+    /// nothing is ever both "New" and a "Hidden Gem" at once.
     func hiddenGems() async throws -> [MediaItem] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -60, to: Date()) ?? Date()
         let url = baseURL
             .appending(path: "discover/movie")
             .appending(queryItems: [
@@ -158,7 +166,8 @@ struct TMDBClient {
                 .init(name: "vote_count.gte", value: "300"),
                 .init(name: "vote_count.lte", value: "999"),
                 .init(name: "without_genres", value: "99,10402"),
-                .init(name: "include_adult", value: "false")
+                .init(name: "include_adult", value: "false"),
+                .init(name: "primary_release_date.lte", value: Self.isoDateFormatter.string(from: cutoff))
             ])
         let results: TMDBSearchResponse = try await fetch(url)
         return results.results.compactMap { MediaItem(from: $0, forcedType: .movie) }
