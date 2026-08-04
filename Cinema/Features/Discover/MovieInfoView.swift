@@ -37,6 +37,13 @@ final class MovieInfoViewModel {
     var friendTakes: [FriendTake] = []
     var isLoading = false
 
+    // Search/Discover/Feed all hand this screen a lightweight `MediaItem` from a TMDB list
+    // endpoint (search/multi, discover, trending) — none of those responses include `runtime`,
+    // only the full `/movie/{id}` or `/tv/{id}` details endpoint does. Fetching it here backfills
+    // that gap rather than silently showing no runtime for almost every film that reaches this
+    // screen, regardless of where it was opened from.
+    var detailedFilm: MediaItem?
+
     var noteDraft: String = ""
     private var savedNote: String = ""
     var isSavingNote = false
@@ -46,6 +53,7 @@ final class MovieInfoViewModel {
         isLoading = true
         defer { isLoading = false }
 
+        detailedFilm = try? await TMDBClient.shared.details(tmdbID: film.id, mediaType: film.mediaType)
         credits = try? await TMDBClient.shared.credits(tmdbID: film.id, mediaType: film.mediaType)
         director = credits?.crew.first(where: { $0.job == "Director" })
         // TMDB credits the source material under two different job titles depending on whether
@@ -296,7 +304,7 @@ struct MovieInfoView: View {
                         metaText("·")
                     }
                     if let year = film.releaseYear { metaText(year) }
-                    if let rt = film.formattedRuntime { metaText("·"); metaText(rt) }
+                    if let rt = vm.detailedFilm?.formattedRuntime ?? film.formattedRuntime { metaText("·"); metaText(rt) }
                     if let score = film.voteAverage, score > 0 {
                         metaText("·")
                         HStack(spacing: 3) {
