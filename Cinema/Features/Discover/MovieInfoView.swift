@@ -175,6 +175,11 @@ final class MovieInfoViewModel {
 
 struct MovieInfoView: View {
     let film: MediaItem
+    // Only Discover's "Most Anticipated" row sets this — that's the one row where a bare
+    // year ("2026") isn't enough to answer the question the row itself raises ("anticipated
+    // for when, exactly?"). Every other entry point (Search, other Discover rows, Feed) keeps
+    // the plain year, so this defaults off rather than needing every call site touched.
+    var showFullReleaseDate: Bool = false
     @State private var vm = MovieInfoViewModel()
     @State private var selectedFriend: CinemaUser?
     @State private var showAddToList = false
@@ -303,7 +308,11 @@ struct MovieInfoView: View {
                             .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
                         metaText("·")
                     }
-                    if let year = film.releaseYear { metaText(year) }
+                    if showFullReleaseDate, let date = film.releaseDate {
+                        metaText(Self.fullReleaseDateFormatter.string(from: date))
+                    } else if let year = film.releaseYear {
+                        metaText(year)
+                    }
                     if let rt = vm.detailedFilm?.formattedRuntime ?? film.formattedRuntime { metaText("·"); metaText(rt) }
                     if let score = film.voteAverage, score > 0 {
                         metaText("·")
@@ -700,6 +709,17 @@ struct MovieInfoView: View {
     private func metaText(_ s: String) -> some View {
         Text(s).font(.system(size: 13)).foregroundStyle(CinemaTheme.Colors.textSecondary)
     }
+
+    // Same UTC timezone/calendar `MediaItem.releaseDate` itself parses with (see MediaItem.swift)
+    // — reusing the local device timezone here would roll a UTC-midnight date back a day for
+    // anyone west of Greenwich, which is most of the US.
+    private static let fullReleaseDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMMM d, yyyy"
+        f.calendar = Calendar(identifier: .gregorian)
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f
+    }()
 }
 
 // MARK: - Section Label

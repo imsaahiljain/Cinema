@@ -95,6 +95,10 @@ struct DiscoverView: View {
     @Environment(AppState.self) private var appState
     @State private var vm = DiscoverViewModel()
     @State private var selectedFilm: MediaItem?
+    // Set alongside `selectedFilm` only by the "Most Anticipated" row's tap closure, and reset
+    // false by every other row — a plain Bool works fine since only one sheet is ever open at
+    // a time, no need to thread this through a richer selection type.
+    @State private var selectedFromMostAnticipated = false
 
     var body: some View {
         ZStack {
@@ -118,12 +122,19 @@ struct DiscoverView: View {
 
                         // New Releases
                         if !vm.newReleases.isEmpty {
-                            MediaRow(title: "New Releases", films: vm.newReleases) { selectedFilm = $0 }
+                            MediaRow(title: "New Releases", films: vm.newReleases) {
+                                selectedFromMostAnticipated = false
+                                selectedFilm = $0
+                            }
                         }
 
-                        // Most Anticipated
+                        // Most Anticipated — the one row where a bare year isn't enough context
+                        // (see MovieInfoView.showFullReleaseDate)
                         if !vm.mostAnticipated.isEmpty {
-                            MediaRow(title: "Most Anticipated", films: vm.mostAnticipated) { selectedFilm = $0 }
+                            MediaRow(title: "Most Anticipated", films: vm.mostAnticipated) {
+                                selectedFromMostAnticipated = true
+                                selectedFilm = $0
+                            }
                         }
 
                         // Friends (gated at 20 following)
@@ -131,17 +142,26 @@ struct DiscoverView: View {
 
                         // Recommendations
                         if !vm.recommendations.isEmpty {
-                            MediaRow(title: "Recommended for You", films: vm.recommendations) { selectedFilm = $0 }
+                            MediaRow(title: "Recommended for You", films: vm.recommendations) {
+                                selectedFromMostAnticipated = false
+                                selectedFilm = $0
+                            }
                         }
 
                         // Highly Rated
                         if !vm.highlyRated.isEmpty {
-                            MediaRow(title: "Highly Rated", films: vm.highlyRated) { selectedFilm = $0 }
+                            MediaRow(title: "Highly Rated", films: vm.highlyRated) {
+                                selectedFromMostAnticipated = false
+                                selectedFilm = $0
+                            }
                         }
 
                         // Platform rows
                         ForEach(Array(vm.platformRows.enumerated()), id: \.offset) { _, row in
-                            MediaRow(title: row.title, films: row.films) { selectedFilm = $0 }
+                            MediaRow(title: row.title, films: row.films) {
+                                selectedFromMostAnticipated = false
+                                selectedFilm = $0
+                            }
                         }
 
                         Spacer().frame(height: 80)
@@ -152,7 +172,7 @@ struct DiscoverView: View {
         }
         .task { await vm.load(currentUserID: appState.currentUser?.id) }
         .sheet(item: $selectedFilm) { film in
-            MovieInfoView(film: film)
+            MovieInfoView(film: film, showFullReleaseDate: selectedFromMostAnticipated)
         }
     }
 
@@ -168,7 +188,10 @@ struct DiscoverView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 4) {
                     ForEach(Array(vm.top10.prefix(10).enumerated()), id: \.element.id) { i, film in
-                        Top10Card(index: i, film: film) { selectedFilm = film }
+                        Top10Card(index: i, film: film) {
+                            selectedFromMostAnticipated = false
+                            selectedFilm = film
+                        }
                     }
                 }
                 .padding(.horizontal, CinemaTheme.Spacing.lg)
@@ -182,7 +205,10 @@ struct DiscoverView: View {
     private var friendsSection: some View {
         if vm.followingCount >= 10 {
             if !vm.friendActivity.isEmpty {
-                MediaRow(title: "Watched by Friends", films: vm.friendActivity) { selectedFilm = $0 }
+                MediaRow(title: "Watched by Friends", films: vm.friendActivity) {
+                    selectedFromMostAnticipated = false
+                    selectedFilm = $0
+                }
             }
         } else if vm.followingCount > 0 || !vm.top10.isEmpty {
             // Show locked state only once data has loaded
