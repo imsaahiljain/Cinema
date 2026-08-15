@@ -133,7 +133,14 @@ struct ProfileView: View {
     @State private var showFollowing = false
     @State private var showSettings = false
     @State private var showPeopleSearch = false
+    @State private var showEditProfile = false
     @AppStorage("cinema_dev_fingerprint") private var devFingerprintUnlocked = false
+
+    private static let memberSinceFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMMM yyyy"
+        return f
+    }()
 
     var body: some View {
         ZStack {
@@ -194,24 +201,43 @@ struct ProfileView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView(appState: appState)
         }
+        .sheet(isPresented: $showEditProfile) {
+            if let user = appState.currentUser {
+                EditProfileView(user: user)
+            }
+        }
     }
 
     // MARK: - Header
 
     private var profileHeader: some View {
         VStack(spacing: 14) {
-            // Avatar
-            ZStack {
-                Circle()
-                    .fill(CinemaTheme.Colors.surface)
+            // Avatar — tap the pencil badge to edit
+            Button { showEditProfile = true } label: {
+                ZStack {
+                    Group {
+                        if let urlString = appState.currentUser?.avatarURL, let url = URL(string: urlString) {
+                            AsyncImage(url: url) { phase in
+                                if case .success(let img) = phase { img.resizable().aspectRatio(contentMode: .fill) }
+                                else { avatarInitial }
+                            }
+                        } else {
+                            avatarInitial
+                        }
+                    }
                     .frame(width: 88, height: 88)
+                    .clipShape(Circle())
                     .overlay(Circle().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
-                Text(appState.currentUser?.displayName?.prefix(1).uppercased()
-                     ?? appState.currentUser?.username.prefix(1).uppercased()
-                     ?? "?")
-                    .font(.system(size: 36, weight: .bold))
-                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+
+                    Circle()
+                        .fill(CinemaTheme.Colors.gold)
+                        .frame(width: 26, height: 26)
+                        .overlay(Image(systemName: "pencil").font(.system(size: 11, weight: .semibold)).foregroundStyle(.black))
+                        .overlay(Circle().strokeBorder(CinemaTheme.Colors.background, lineWidth: 2))
+                        .offset(x: 31, y: 31)
+                }
             }
+            .buttonStyle(.plain)
             .padding(.top, 16)
 
             VStack(spacing: 5) {
@@ -221,25 +247,49 @@ struct ProfileView: View {
                 Text("@\(appState.currentUser?.username ?? "")")
                     .font(.system(size: 15))
                     .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                if let bio = appState.currentUser?.bio, !bio.isEmpty {
+                    Text(bio)
+                        .font(.system(size: 13))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                        .padding(.top, 2)
+                }
+                if let createdAt = appState.currentUser?.createdAt {
+                    Text("Member since \(Self.memberSinceFormatter.string(from: createdAt))")
+                        .font(.system(size: 12))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.6))
+                        .padding(.top, 4)
+                }
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.bottom, 28)
     }
 
+    private var avatarInitial: some View {
+        CinemaTheme.Colors.surface.overlay(
+            Text(appState.currentUser?.displayName?.prefix(1).uppercased()
+                 ?? appState.currentUser?.username.prefix(1).uppercased()
+                 ?? "?")
+                .font(.system(size: 36, weight: .bold))
+                .foregroundStyle(CinemaTheme.Colors.textPrimary)
+        )
+    }
+
     // MARK: - Social Stats
 
     private var socialStats: some View {
         HStack(spacing: 0) {
-            StatCell(value: "\(vm.rankedCount)", label: "Ranked", tappable: false) {}
+            StatCell(value: "\(vm.followerCount)", label: "Followers", tappable: true) {
+                showFollowers = true
+            }
 
             Rectangle()
                 .fill(CinemaTheme.Colors.border)
                 .frame(width: 1, height: 40)
 
-            StatCell(value: "\(vm.followerCount)", label: "Followers", tappable: true) {
-                showFollowers = true
-            }
+            StatCell(value: "\(vm.rankedCount)", label: "Ranked", tappable: false) {}
 
             Rectangle()
                 .fill(CinemaTheme.Colors.border)
@@ -427,6 +477,7 @@ struct SettingsView: View {
     @AppStorage("cinema_dev_fingerprint") private var devFingerprintUnlocked = false
     @AppStorage("cinema_dev_scores_unlocked") private var devScoresUnlocked = false
     @Environment(\.dismiss) private var dismiss
+    @State private var showEditProfile = false
 
     var body: some View {
         NavigationStack {
@@ -438,6 +489,10 @@ struct SettingsView: View {
 
                         // Account
                         SettingsSection(title: "Account") {
+                            SettingsRow(icon: "person.crop.circle", iconColor: CinemaTheme.Colors.gold, label: "Edit Profile") {
+                                showEditProfile = true
+                            }
+                            Divider().background(CinemaTheme.Colors.border).padding(.leading, 52)
                             SettingsRow(icon: "key.fill", iconColor: CinemaTheme.Colors.gold, label: "Change Password", note: "Coming soon", disabled: true) {}
                             Divider().background(CinemaTheme.Colors.border).padding(.leading, 52)
                             SettingsRow(icon: "bell.fill", iconColor: .blue, label: "Notifications", note: "Coming soon", disabled: true) {}
@@ -550,6 +605,11 @@ struct SettingsView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
                         .foregroundStyle(CinemaTheme.Colors.gold)
+                }
+            }
+            .sheet(isPresented: $showEditProfile) {
+                if let user = appState.currentUser {
+                    EditProfileView(user: user)
                 }
             }
         }

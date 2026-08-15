@@ -21,7 +21,6 @@
 		3F42334E5A16E2DC2C1B98A6 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B8A564A01E418389F6CB0E8 /* AppState.swift */; };
 		4B798F0E6BB264BE4FAC2E88 /* LibreCaslonText-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3EF308B64CE30E426236C07C /* LibreCaslonText-Regular.ttf */; };
 		4FD7FC5889D63BB95AF2948A /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C83E1A7A3D9EE17085F23C6C /* RootView.swift */; };
-		544A035FB40C0037B07E26DE /* LeaderboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFD116937AAC729CA33C8829 /* LeaderboardView.swift */; };
 		59606C18B058A3EA2FF7817C /* TMDBClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD02B3CF21F04A2669A89234 /* TMDBClient.swift */; };
 		5B44A725C520A94C18B799D3 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1981E84705ED6DF978BDCF98 /* Log.swift */; };
 		62B60CF815B02244008A7D43 /* CustomList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50EE58F15E8E30A0DF95BA66 /* CustomList.swift */; };
@@ -34,6 +33,7 @@
 		857EA269A7043EA70B9E0568 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00768B59A655BABAFB17CD6 /* ProfileView.swift */; };
 		8C59F2482E91C6BC6203B102 /* AddToListSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10A05020314D0E674DC0C36 /* AddToListSheet.swift */; };
 		9508C0F2E6498FBEDF0C149B /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3BD8BDAB9CC17FD0B896A6D /* Secrets.swift */; };
+		95BFFAEAB99C7AB3DF3E7699 /* EditProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65258A723C1CD4E5EA116234 /* EditProfileView.swift */; };
 		A1B71292DDE8ED314994D138 /* PeopleSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B82CE0473DD01617871A90BF /* PeopleSearchView.swift */; };
 		A1F2E09FE1AB3D9A7BC478EC /* LibreCaslonText-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 47C9836D650B8F37B4803907 /* LibreCaslonText-Bold.ttf */; };
 		A250F69CE75D2D402DCA7EC3 /* CinemaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37109B718B53FD6EB359A77C /* CinemaApp.swift */; };
@@ -76,11 +76,11 @@
 		50EE58F15E8E30A0DF95BA66 /* CustomList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomList.swift; sourceTree = "<group>"; };
 		530C7F0DB52CAC3077C9CD1F /* ListsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListsView.swift; sourceTree = "<group>"; };
 		5D21685CB405D619BE0A1A89 /* RankingPrototypeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingPrototypeView.swift; sourceTree = "<group>"; };
+		65258A723C1CD4E5EA116234 /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
 		716F3EF3F2B0C5963A9A3BA9 /* CinemaUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CinemaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		82ECD83DF5DBD40D16BCE440 /* NunitoSans-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "NunitoSans-Bold.ttf"; sourceTree = "<group>"; };
 		A3BD8BDAB9CC17FD0B896A6D /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		A5D65343706BC8CD34661074 /* CinemaUser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaUser.swift; sourceTree = "<group>"; };
-		AFD116937AAC729CA33C8829 /* LeaderboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardView.swift; sourceTree = "<group>"; };
 		B00768B59A655BABAFB17CD6 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		B42F0F367D8E746801C20F66 /* NunitoSans-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "NunitoSans-Regular.ttf"; sourceTree = "<group>"; };
 		B5689F8A04B12726941D1FB2 /* CinemaUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaUITests.swift; sourceTree = "<group>"; };
@@ -141,14 +141,6 @@
 				FD02B3CF21F04A2669A89234 /* TMDBClient.swift */,
 			);
 			path = Network;
-			sourceTree = "<group>";
-		};
-		3A988DB1C5CC47FBFC95FF41 /* Leaderboard */ = {
-			isa = PBXGroup;
-			children = (
-				AFD116937AAC729CA33C8829 /* LeaderboardView.swift */,
-			);
-			path = Leaderboard;
 			sourceTree = "<group>";
 		};
 		3D18F4FC5CC7B3828D34EEBB /* CinemaUITests */ = {
@@ -275,6 +267,7 @@
 		CD887A9EDC6F5BB11B3C7437 /* Profile */ = {
 			isa = PBXGroup;
 			children = (
+				65258A723C1CD4E5EA116234 /* EditProfileView.swift */,
 				B82CE0473DD01617871A90BF /* PeopleSearchView.swift */,
 				B00768B59A655BABAFB17CD6 /* ProfileView.swift */,
 			);
@@ -316,7 +309,6 @@
 				73849E701117AB2CA522B0C3 /* Auth */,
 				83DFDCB80E4EA2B4E9495E05 /* Discover */,
 				BF4DCC654977402A5D544E74 /* Feed */,
-				3A988DB1C5CC47FBFC95FF41 /* Leaderboard */,
 				ABCC2130F2D5130C827EE7BD /* Lists */,
 				A46E42E57ABDBCE2980700F0 /* Onboarding */,
 				CD887A9EDC6F5BB11B3C7437 /* Profile */,
@@ -458,10 +450,10 @@
 				3B47F84367E892F3B2930035 /* DiagonalOverarchWinEffect.swift in Sources */,
 				677151F79942E0B4FED24F67 /* DiscoverView.swift in Sources */,
 				0AA3EA0AD48B8314A5F4809B /* ELOService.swift in Sources */,
+				95BFFAEAB99C7AB3DF3E7699 /* EditProfileView.swift in Sources */,
 				34A8E9FFF570172A75CB7ED0 /* FeedMarqueeView.swift in Sources */,
 				00E9C31760999F85B1EFCDD2 /* FeedPrototypeView.swift in Sources */,
 				7C4CA3F23C3A5C425A37375D /* GlassCard.swift in Sources */,
-				544A035FB40C0037B07E26DE /* LeaderboardView.swift in Sources */,
 				682A089F56AA1DD388E3383D /* ListsView.swift in Sources */,
 				5B44A725C520A94C18B799D3 /* Log.swift in Sources */,
 				EAEBD73332734E8C8697F037 /* MainTabView.swift in Sources */,
