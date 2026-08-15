@@ -40,6 +40,7 @@
 		AD39238523FD4394E5E21741 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 416690B4CBCE1E67F3C7A792 /* Supabase */; };
 		B0092C52AE699944D988F4F3 /* MediaItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB623A11E101E67864FA95BD /* MediaItem.swift */; };
 		BAA603042BD84413238A70A7 /* NunitoSans-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E0506113DA15DB8A2B426843 /* NunitoSans-SemiBold.ttf */; };
+		CA8340FF7F37692D13D677E2 /* InstagramShareService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50FB5AF9E85CB9BFFF8FA8E2 /* InstagramShareService.swift */; };
 		D657848E86985F1375D4A1C6 /* MovieInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DF633982F3A20D7E1103DB9 /* MovieInfoView.swift */; };
 		E58A4E0E86F7AC910B338142 /* NunitoSans-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 82ECD83DF5DBD40D16BCE440 /* NunitoSans-Bold.ttf */; };
 		EAEBD73332734E8C8697F037 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEDF737AB14A01612CDDBC73 /* MainTabView.swift */; };
@@ -74,6 +75,7 @@
 		479F67E8B319479E66ACF14A /* DiagonalOverarchWinEffect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagonalOverarchWinEffect.swift; sourceTree = "<group>"; };
 		47C9836D650B8F37B4803907 /* LibreCaslonText-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "LibreCaslonText-Bold.ttf"; sourceTree = "<group>"; };
 		50EE58F15E8E30A0DF95BA66 /* CustomList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomList.swift; sourceTree = "<group>"; };
+		50FB5AF9E85CB9BFFF8FA8E2 /* InstagramShareService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstagramShareService.swift; sourceTree = "<group>"; };
 		530C7F0DB52CAC3077C9CD1F /* ListsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListsView.swift; sourceTree = "<group>"; };
 		5D21685CB405D619BE0A1A89 /* RankingPrototypeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingPrototypeView.swift; sourceTree = "<group>"; };
 		65258A723C1CD4E5EA116234 /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
@@ -128,6 +130,7 @@
 			isa = PBXGroup;
 			children = (
 				D937843E51844F3C60087C3C /* ELOService.swift */,
+				50FB5AF9E85CB9BFFF8FA8E2 /* InstagramShareService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -454,6 +457,7 @@
 				34A8E9FFF570172A75CB7ED0 /* FeedMarqueeView.swift in Sources */,
 				00E9C31760999F85B1EFCDD2 /* FeedPrototypeView.swift in Sources */,
 				7C4CA3F23C3A5C425A37375D /* GlassCard.swift in Sources */,
+				CA8340FF7F37692D13D677E2 /* InstagramShareService.swift in Sources */,
 				682A089F56AA1DD388E3383D /* ListsView.swift in Sources */,
 				5B44A725C520A94C18B799D3 /* Log.swift in Sources */,
 				EAEBD73332734E8C8697F037 /* MainTabView.swift in Sources */,
