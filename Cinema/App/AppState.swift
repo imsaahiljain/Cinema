@@ -98,4 +98,29 @@ final class AppState {
         hasCompletedOnboarding = false
         showingOnboarding = false
     }
+
+    /// Permanently deletes the current user's account. Cascades through every table via
+    /// foreign keys (ranked_items, elo_matches, follows, feed_events, watchlist, custom_lists,
+    /// list_items, film_notes) down from `auth.users` — see the `delete_own_account` Postgres
+    /// function (SECURITY DEFINER, runs as `delete from auth.users where id = auth.uid()`).
+    /// Returns false on failure so the caller can show an error instead of assuming success.
+    func deleteAccount() async -> Bool {
+        guard let userID = currentUser?.id else { return false }
+        Log.app.info("deleteAccount: deleting \(userID)")
+        // Best-effort — an orphaned avatar file isn't worth failing the whole deletion over.
+        try? await SupabaseClient.shared.storage.from("avatars").remove(paths: ["\(userID.uuidString)/avatar.jpg"])
+        do {
+            try await SupabaseClient.shared.rpc("delete_own_account").execute()
+        } catch {
+            Log.app.error("deleteAccount: RPC failed — \(error.localizedDescription)")
+            return false
+        }
+        try? await SupabaseClient.shared.auth.signOut()
+        currentUser = nil
+        isAuthenticated = false
+        hasCompletedOnboarding = false
+        showingOnboarding = false
+        Log.app.info("deleteAccount: success")
+        return true
+    }
 }

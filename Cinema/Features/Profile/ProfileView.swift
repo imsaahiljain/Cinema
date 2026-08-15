@@ -478,6 +478,9 @@ struct SettingsView: View {
     @AppStorage("cinema_dev_scores_unlocked") private var devScoresUnlocked = false
     @Environment(\.dismiss) private var dismiss
     @State private var showEditProfile = false
+    @State private var showDeleteConfirm = false
+    @State private var isDeletingAccount = false
+    @State private var deleteErrorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -594,6 +597,36 @@ struct SettingsView: View {
                             .strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
                         .padding(.horizontal, CinemaTheme.Spacing.lg)
 
+                        // Delete Account — kept separate from Sign Out, own section, so it
+                        // can't be mis-tapped reaching for the (much more common) sign-out row.
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("DANGER ZONE")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                                .padding(.horizontal, CinemaTheme.Spacing.lg)
+
+                            Button {
+                                showDeleteConfirm = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "trash.fill")
+                                        .font(.system(size: 16))
+                                    Text("Delete Account")
+                                        .font(.system(size: 16))
+                                    Spacer()
+                                }
+                                .foregroundStyle(.red)
+                                .padding(.horizontal, CinemaTheme.Spacing.lg)
+                                .padding(.vertical, 16)
+                            }
+                            .background(CinemaTheme.Colors.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
+                            .overlay(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md)
+                                .strokeBorder(Color.red.opacity(0.3), lineWidth: 1))
+                            .padding(.horizontal, CinemaTheme.Spacing.lg)
+                            .disabled(isDeletingAccount)
+                        }
+
                         Spacer().frame(height: 40)
                     }
                     .padding(.top, 20)
@@ -612,7 +645,46 @@ struct SettingsView: View {
                     EditProfileView(user: user)
                 }
             }
+            .confirmationDialog(
+                "Delete your account?",
+                isPresented: $showDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Account", role: .destructive) {
+                    Task { await performDelete() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This permanently deletes your account, every ranking, and your follows. This can't be undone.")
+            }
+            .alert("Couldn't Delete Account", isPresented: Binding(
+                get: { deleteErrorMessage != nil },
+                set: { if !$0 { deleteErrorMessage = nil } }
+            )) {
+                Button("OK") { deleteErrorMessage = nil }
+            } message: {
+                Text(deleteErrorMessage ?? "")
+            }
+            .overlay {
+                if isDeletingAccount {
+                    ZStack {
+                        Color.black.opacity(0.6).ignoresSafeArea()
+                        ProgressView().tint(CinemaTheme.Colors.gold)
+                    }
+                }
+            }
         }
+    }
+
+    private func performDelete() async {
+        isDeletingAccount = true
+        let success = await appState.deleteAccount()
+        isDeletingAccount = false
+        if !success {
+            deleteErrorMessage = "Something went wrong. Check your connection and try again."
+        }
+        // On success, AppState.isAuthenticated flips to false and RootView swaps to the
+        // auth screen on its own — no explicit dismiss needed here.
     }
 }
 
