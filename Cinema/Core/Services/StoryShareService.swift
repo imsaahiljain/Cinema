@@ -5,21 +5,24 @@ import UIKit
 
 enum StoryShareContent {
     case posterGrid(films: [MediaItem], title: String)
-    case statCard(title: String, value: String, subtitle: String)
 }
 
-// MARK: - InstagramShareService
+// MARK: - StoryShareService
 
-/// Shares a rendered 9:16 "story" card straight to Instagram Stories via the documented
-/// pasteboard + URL-scheme handoff (the same mechanism Spotify Wrapped etc. use) — no
-/// Instagram API/OAuth needed. Falls back to the plain iOS share sheet when Instagram isn't
-/// installed. Requires `instagram-stories` under `LSApplicationQueriesSchemes` in
-/// project.yml — without it, `canOpenURL` silently returns false even when the app IS
-/// installed, since iOS 9 requires schemes an app wants to query to be declared up front.
+/// Renders a 9:16 "story" card and hands it to the standard iOS share sheet — Messages,
+/// Instagram, Facebook, WhatsApp, Save Image, etc. all show up there for free, exactly like
+/// every other share button in the app (`ShareCardView`).
+///
+/// A prior version tried to post straight to Instagram Stories via the documented pasteboard
+/// + `instagram-stories://` URL-scheme handoff, skipping the share sheet entirely. That's a
+/// real, commonly-used mechanism, but it failed in practice — real Instagram rejected it with
+/// "this app doesn't currently support sharing to stories," which happens when Instagram's
+/// own allowlist/format checks on the pasteboard payload don't pass, not something fixable by
+/// tweaking the pasteboard dictionary further. The share sheet's own Instagram entry already
+/// opens Instagram's native share flow (Stories/Feed/DM, user's choice) and just works, so
+/// that one-tap "skip Instagram's own UI" shortcut isn't worth the fragility.
 @MainActor
-enum InstagramShareService {
-    private static let storiesURL = URL(string: "instagram-stories://share")!
-
+enum StoryShareService {
     static func share(_ content: StoryShareContent, user: CinemaUser?) {
         let card = StoryShareCard(content: content, user: user)
             .frame(width: 405, height: 720) // 9:16 at a size ImageRenderer handles cleanly
@@ -29,18 +32,6 @@ enum InstagramShareService {
 
         guard let image = renderer.uiImage else { return }
 
-        if UIApplication.shared.canOpenURL(storiesURL), let jpegData = image.jpegData(compressionQuality: 0.92) {
-            UIPasteboard.general.setItems(
-                [["com.instagram.sharedSticker.backgroundImage": jpegData]],
-                options: [.expirationDate: Date().addingTimeInterval(300)]
-            )
-            UIApplication.shared.open(storiesURL)
-        } else {
-            presentShareSheet(image: image)
-        }
-    }
-
-    private static func presentShareSheet(image: UIImage) {
         let av = UIActivityViewController(activityItems: [image], applicationActivities: nil)
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let root = scene.windows.first?.rootViewController {
@@ -81,20 +72,6 @@ struct StoryShareCard: View {
                             }
                         }
                         .padding(.horizontal, 36)
-                    }
-                case .statCard(let title, let value, let subtitle):
-                    VStack(spacing: 14) {
-                        Text(title.uppercased())
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                        Text(value)
-                            .font(.system(size: 40, weight: .bold))
-                            .foregroundStyle(CinemaTheme.Colors.gold)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 32)
-                        Text(subtitle)
-                            .font(.system(size: 14))
-                            .foregroundStyle(CinemaTheme.Colors.textSecondary)
                     }
                 }
 

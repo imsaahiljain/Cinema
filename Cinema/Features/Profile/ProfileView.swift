@@ -43,6 +43,7 @@ final class ProfileViewModel {
     var topFilms: [MediaItem] = []
     var leastLikedFilms: [MediaItem] = []
     var favoriteGenre: String?
+    var favoriteGenreFilms: [MediaItem] = []
     var followerCount: Int = 0
     var followingCount: Int = 0
     var tasteProfile: TasteProfile?
@@ -103,7 +104,10 @@ final class ProfileViewModel {
                 await loadFavoriteGenre(items: Array(items.prefix(20)))
             }
 
-            if items.count >= 25 && tasteProfile == nil {
+            // No `tasteProfile == nil` guard — always recompute on every load so re-ranking
+            // films and pulling to refresh actually changes what's shown here, instead of
+            // freezing on whatever the first 25-film snapshot happened to be.
+            if items.count >= 25 {
                 isTasteProfileLoading = true
                 await loadTasteProfile(items: Array(items.prefix(25)))
                 isTasteProfileLoading = false
@@ -113,26 +117,39 @@ final class ProfileViewModel {
 
     /// Lighter-weight than the full taste profile below — just genres, ELO-weighted, no
     /// gate beyond `rankedCount >= 5` — so the carousel's Favorite Genre page isn't stuck
-    /// behind the same 25-film wall as the full Film Favorites section.
+    /// behind the same 25-film wall as the full Film Favorites section. Also builds the
+    /// actual poster grid for that genre (the films that earned it the win), not just the
+    /// genre name, so the card has something to look at instead of one word in a void.
     private func loadFavoriteGenre(items: [RankedItem]) async {
         var genreScore: [String: Double] = [:]
-        await withTaskGroup(of: (Double, [String]).self) { group in
+        var genresByItem: [UUID: [String]] = [:]
+        var mediaByItem: [UUID: MediaItem] = [:]
+
+        await withTaskGroup(of: (RankedItem, MediaItem?).self) { group in
             for item in items {
-                let tmdbID = item.tmdbID
-                let mediaType = item.mediaType
-                let elo = item.eloScore
                 group.addTask {
-                    guard let media = try? await TMDBClient.shared.details(tmdbID: tmdbID, mediaType: mediaType) else {
-                        return (elo, [])
-                    }
-                    return (elo, media.genreNames)
+                    let media = try? await TMDBClient.shared.details(tmdbID: item.tmdbID, mediaType: item.mediaType)
+                    return (item, media)
                 }
             }
-            for await (elo, genres) in group {
-                for g in genres { genreScore[g, default: 0] += elo }
+            for await (item, media) in group {
+                let genres = media?.genreNames ?? []
+                genresByItem[item.id] = genres
+                if let media { mediaByItem[item.id] = media }
+                for g in genres { genreScore[g, default: 0] += item.eloScore }
             }
         }
-        favoriteGenre = genreScore.max(by: { $0.value < $1.value })?.key
+
+        guard let topGenre = genreScore.max(by: { $0.value < $1.value })?.key else {
+            favoriteGenre = nil
+            favoriteGenreFilms = []
+            return
+        }
+        favoriteGenre = topGenre
+        // `items` is already ELO-descending, so filtering preserves that order.
+        favoriteGenreFilms = items
+            .filter { genresByItem[$0.id]?.contains(topGenre) == true }
+            .compactMap { mediaByItem[$0.id] }
     }
 
     /// Weighted by ELO score, not raw frequency — a film ranked #1 pulls harder toward its
@@ -372,7 +389,7 @@ struct ProfileView: View {
     private var carouselPages: [CarouselPage] {
         var pages: [CarouselPage] = [.topFilms]
         if !vm.leastLikedFilms.isEmpty { pages.append(.leastLiked) }
-        if vm.favoriteGenre != nil { pages.append(.favoriteGenre) }
+        if !vm.favoriteGenreFilms.isEmpty { pages.append(.favoriteGenre) }
         return pages
     }
 
@@ -426,29 +443,39 @@ struct ProfileView: View {
         .padding(.bottom, 36)
     }
 
+    // Every page is a poster grid with an optional corner badge — Top Films badges its #1,
+    // Favorite Genre badges the genre name on the film that earned it, Least Liked has no
+    // badge. Keeping all three on one component is deliberate: the first version gave
+    // Favorite Genre a bespoke "one word floating in a dark box" layout and it read as an
+    // empty, unfinished page next to the other two real poster grids.
     @ViewBuilder
     private func carouselCard(for page: CarouselPage) -> some View {
         switch page {
         case .topFilms:
             posterGridCard(
                 films: vm.topFilms,
-                showRankBadge: true,
+                cornerBadge: { i in i == 0 ? "#1" : nil },
                 emptyText: "Rank 9 films to see your top grid.",
                 shareTitle: "Top Films"
             )
         case .leastLiked:
             posterGridCard(
                 films: vm.leastLikedFilms,
-                showRankBadge: false,
+                cornerBadge: { _ in nil },
                 emptyText: "Rank more films to see this.",
                 shareTitle: "Least Liked"
             )
         case .favoriteGenre:
-            favoriteGenreCard
+            posterGridCard(
+                films: vm.favoriteGenreFilms,
+                cornerBadge: { i in i == 0 ? vm.favoriteGenre?.uppercased() : nil },
+                emptyText: "Rank a few more films to see your favorite genre.",
+                shareTitle: vm.favoriteGenre ?? "Favorite Genre"
+            )
         }
     }
 
-    private func posterGridCard(films: [MediaItem], showRankBadge: Bool, emptyText: String, shareTitle: String) -> some View {
+    private func posterGridCard(films: [MediaItem], cornerBadge: @escaping (Int) -> String?, emptyText: String, shareTitle: String) -> some View {
         ZStack(alignment: .topTrailing) {
             if films.isEmpty {
                 RoundedRectangle(cornerRadius: CinemaTheme.Radius.md)
@@ -473,8 +500,8 @@ struct ProfileView: View {
                         ZStack(alignment: .topLeading) {
                             PosterImage(path: film.posterPath, cornerRadius: 0)
                                 .aspectRatio(2/3, contentMode: .fit)
-                            if showRankBadge && i == 0 {
-                                Text("#1")
+                            if let badge = cornerBadge(i) {
+                                Text(badge)
                                     .font(.system(size: 11, weight: .black))
                                     .foregroundStyle(.black)
                                     .padding(.horizontal, 6)
@@ -482,6 +509,7 @@ struct ProfileView: View {
                                     .background(CinemaTheme.Colors.gold)
                                     .clipShape(RoundedRectangle(cornerRadius: 4))
                                     .padding(6)
+                                    .lineLimit(1)
                             }
                         }
                     }
@@ -489,39 +517,7 @@ struct ProfileView: View {
                 .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
 
                 shareButton {
-                    InstagramShareService.share(.posterGrid(films: films, title: shareTitle), user: appState.currentUser)
-                }
-                .padding(8)
-            }
-        }
-    }
-
-    private var favoriteGenreCard: some View {
-        ZStack(alignment: .topTrailing) {
-            RoundedRectangle(cornerRadius: CinemaTheme.Radius.md)
-                .fill(CinemaTheme.Colors.surface)
-                .overlay(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md).strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
-                .overlay(
-                    VStack(spacing: 10) {
-                        Text("YOUR FAVORITE GENRE")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                        Text(vm.favoriteGenre ?? "—")
-                            .font(.system(size: 30, weight: .bold))
-                            .foregroundStyle(CinemaTheme.Colors.gold)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 20)
-                        Text("weighted by your scores, not just what shows up most")
-                            .font(.system(size: 11))
-                            .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.7))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 32)
-                    }
-                )
-
-            if let genre = vm.favoriteGenre {
-                shareButton {
-                    InstagramShareService.share(.statCard(title: "Favorite Genre", value: genre, subtitle: "on Popcorn"), user: appState.currentUser)
+                    StoryShareService.share(.posterGrid(films: films, title: shareTitle), user: appState.currentUser)
                 }
                 .padding(8)
             }

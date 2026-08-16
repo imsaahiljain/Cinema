@@ -49,8 +49,6 @@ targets:
           - UIInterfaceOrientationPortrait
         NSPhotoLibraryUsageDescription: "Used to set your profile photo."
         NSContactsUsageDescription: "Popcorn uses your contacts to find friends already on the app."
-        LSApplicationQueriesSchemes:
-          - instagram-stories
         UIAppFonts:
           - LibreCaslonText-Regular.ttf
           - LibreCaslonText-Bold.ttf

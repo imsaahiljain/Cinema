@@ -20,10 +20,6 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>LSApplicationQueriesSchemes</key>
-	<array>
-		<string>instagram-stories</string>
-	</array>
 	<key>NSContactsUsageDescription</key>
 	<string>Popcorn uses your contacts to find friends already on the app.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
