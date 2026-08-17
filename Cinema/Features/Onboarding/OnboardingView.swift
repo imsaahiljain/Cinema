@@ -133,12 +133,32 @@ final class OnboardingViewModel {
             let display = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
             Log.onboarding.info("createAccount: auth signup OK — uid=\(user.id)")
 
+            // The photo step requires an image before it lets you continue (see `canContinue`),
+            // so this should always be set — upload it the same way EditProfileView does.
+            var avatarURL: String? = nil
+            if let image = profileUIImage, let jpegData = image.jpegData(compressionQuality: 0.8) {
+                let path = "\(user.id.uuidString)/avatar.jpg"
+                do {
+                    try await SupabaseClient.shared.storage
+                        .from("avatars")
+                        .upload(path, data: jpegData, options: FileOptions(contentType: "image/jpeg", upsert: true))
+                    avatarURL = try SupabaseClient.shared.storage
+                        .from("avatars")
+                        .getPublicURL(path: path, cacheNonce: UUID().uuidString)
+                        .absoluteString
+                } catch {
+                    // Non-fatal — account creation shouldn't fail over an avatar upload hiccup.
+                    Log.onboarding.error("createAccount: avatar upload failed — \(error.localizedDescription)")
+                }
+            }
+
             try await SupabaseClient.shared
                 .from("users")
                 .insert([
                     "id": user.id.uuidString,
                     "username": username.lowercased().trimmingCharacters(in: .whitespaces),
                     "display_name": display,
+                    "avatar_url": avatarURL,
                     "onboarded": "false",
                 ])
                 .execute()
@@ -151,7 +171,7 @@ final class OnboardingViewModel {
                 id: user.id,
                 username: username.lowercased().trimmingCharacters(in: .whitespaces),
                 displayName: display,
-                avatarURL: nil,
+                avatarURL: avatarURL,
                 bio: nil,
                 onboarded: false,
                 createdAt: Date()

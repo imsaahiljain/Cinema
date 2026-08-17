@@ -4,14 +4,24 @@ import Supabase
 // MARK: - Local Types
 
 struct TasteProfile {
+    struct WeightedPerson: Identifiable {
+        let id: Int
+        let name: String
+        let profilePath: String?
+    }
+
     let topGenres: [String]
-    let favoriteDirector: String?
-    let favoriteActors: [String]
+    let favoriteDirector: WeightedPerson?
+    let favoriteActors: [WeightedPerson]
 
     static let mock = TasteProfile(
         topGenres: ["Drama", "Thriller", "Sci-Fi"],
-        favoriteDirector: "Christopher Nolan",
-        favoriteActors: ["Tom Hanks", "Cate Blanchett", "Timothée Chalamet"]
+        favoriteDirector: WeightedPerson(id: 525, name: "Christopher Nolan", profilePath: "/xuAIuYSmsUzKlUMBFGVZaWsY3DZ.jpg"),
+        favoriteActors: [
+            WeightedPerson(id: 31, name: "Tom Hanks", profilePath: "/xndWFsBlClOJFRdhziRzhaWQjEB.jpg"),
+            WeightedPerson(id: 5081, name: "Cate Blanchett", profilePath: "/nJRciH8VXDbg496OG7RsAibkxRy.jpg"),
+            WeightedPerson(id: 90633, name: "Timothée Chalamet", profilePath: "/BE2sdjpgsa2rNTFa66f7upkaOP.jpg"),
+        ]
     )
 }
 
@@ -24,6 +34,14 @@ private struct FollowRecord: Decodable {
     }
 }
 
+struct ActivityEntry: Identifiable {
+    let id: UUID
+    let media: MediaItem
+    let ratingOutOf10: Double?
+    let note: String?
+    let updatedAt: Date
+}
+
 // MARK: - ViewModel
 
 @Observable
@@ -31,6 +49,10 @@ private struct FollowRecord: Decodable {
 final class ProfileViewModel {
     var allRankedItems: [RankedItem] = []
     var topFilms: [MediaItem] = []
+    var leastLikedFilms: [MediaItem] = []
+    var favoriteGenre: String?
+    var favoriteGenreFilms: [MediaItem] = []
+    var recentActivity: [ActivityEntry] = []
     var followerCount: Int = 0
     var followingCount: Int = 0
     var tasteProfile: TasteProfile?
@@ -78,7 +100,25 @@ final class ProfileViewModel {
             }
             topFilms = loaded
 
-            if items.count >= 25 && tasteProfile == nil {
+            await loadRecentActivity(userID: userID, items: items)
+
+            // Least Liked / Favorite Genre need more than a handful ranked to mean anything
+            // distinct from Top Films — 5 is a low, mostly-just-not-empty bar.
+            if items.count >= 5 {
+                var leastLoaded: [MediaItem] = []
+                for item in items.suffix(9).reversed() {
+                    if let media = try? await TMDBClient.shared.details(tmdbID: item.tmdbID, mediaType: item.mediaType) {
+                        leastLoaded.append(media)
+                    }
+                }
+                leastLikedFilms = leastLoaded
+                await loadFavoriteGenre(items: Array(items.prefix(20)))
+            }
+
+            // No `tasteProfile == nil` guard — always recompute on every load so re-ranking
+            // films and pulling to refresh actually changes what's shown here, instead of
+            // freezing on whatever the first 25-film snapshot happened to be.
+            if items.count >= 25 {
                 isTasteProfileLoading = true
                 await loadTasteProfile(items: Array(items.prefix(25)))
                 isTasteProfileLoading = false
@@ -86,40 +126,136 @@ final class ProfileViewModel {
         } catch {}
     }
 
-    private func loadTasteProfile(items: [RankedItem]) async {
-        var genreFreq: [String: Int] = [:]
-        var directorFreq: [String: Int] = [:]
-        var actorFreq: [String: Int] = [:]
+    /// Most-recently-ranked-or-updated first, not ELO order — this is meant to read as "what
+    /// have you been up to," not another view of the same top/bottom lists. Reuses your own
+    /// private note (`film_notes`) if you left one, same as MovieInfoView's note field.
+    private func loadRecentActivity(userID: UUID, items: [RankedItem]) async {
+        let recent = items.sorted { $0.updatedAt > $1.updatedAt }.prefix(10)
+        guard !recent.isEmpty else { recentActivity = []; return }
 
-        await withTaskGroup(of: ([String], String?, [String]).self) { group in
+        let notesByKey: [String: String] = await {
+            let tmdbIDs = Array(Set(recent.map(\.tmdbID)))
+            guard let notes: [FilmNote] = try? await SupabaseClient.shared
+                .from("film_notes")
+                .select()
+                .eq("user_id", value: userID)
+                .in("tmdb_id", values: tmdbIDs)
+                .execute()
+                .value else { return [:] }
+            return Dictionary(uniqueKeysWithValues: notes.map { ("\($0.tmdbID)-\($0.mediaType.rawValue)", $0.note) })
+        }()
+
+        // Same linear rank->rating formula as MovieInfoViewModel.FriendTake.ratingOutOf10
+        // (#1 of N = 10.0, #N of N = 0.0) — reused here rather than reinvented so a film's
+        // score reads the same on your profile as it does on its own detail screen.
+        let totalRanked = items.count
+        func ratingOutOf10(for rankPosition: Int?) -> Double? {
+            guard let pos = rankPosition, totalRanked > 1 else { return rankPosition == 1 ? 10.0 : nil }
+            return max(0, (1.0 - Double(pos - 1) / Double(totalRanked - 1)) * 10.0)
+        }
+
+        var entries: [ActivityEntry] = []
+        for item in recent {
+            guard let media = try? await TMDBClient.shared.details(tmdbID: item.tmdbID, mediaType: item.mediaType) else { continue }
+            let note = notesByKey["\(item.tmdbID)-\(item.mediaType.rawValue)"]
+            entries.append(ActivityEntry(
+                id: item.id,
+                media: media,
+                ratingOutOf10: ratingOutOf10(for: item.rankPosition),
+                note: (note?.isEmpty == false) ? note : nil,
+                updatedAt: item.updatedAt
+            ))
+        }
+        recentActivity = entries
+    }
+
+    /// Lighter-weight than the full taste profile below — just genres, ELO-weighted, no
+    /// gate beyond `rankedCount >= 5` — so the carousel's Favorite Genre page isn't stuck
+    /// behind the same 25-film wall as the full Film Favorites section. Also builds the
+    /// actual poster grid for that genre (the films that earned it the win), not just the
+    /// genre name, so the card has something to look at instead of one word in a void.
+    private func loadFavoriteGenre(items: [RankedItem]) async {
+        var genreScore: [String: Double] = [:]
+        var genresByItem: [UUID: [String]] = [:]
+        var mediaByItem: [UUID: MediaItem] = [:]
+
+        await withTaskGroup(of: (RankedItem, MediaItem?).self) { group in
+            for item in items {
+                group.addTask {
+                    let media = try? await TMDBClient.shared.details(tmdbID: item.tmdbID, mediaType: item.mediaType)
+                    return (item, media)
+                }
+            }
+            for await (item, media) in group {
+                let genres = media?.genreNames ?? []
+                genresByItem[item.id] = genres
+                if let media { mediaByItem[item.id] = media }
+                for g in genres { genreScore[g, default: 0] += item.eloScore }
+            }
+        }
+
+        guard let topGenre = genreScore.max(by: { $0.value < $1.value })?.key else {
+            favoriteGenre = nil
+            favoriteGenreFilms = []
+            return
+        }
+        favoriteGenre = topGenre
+        // `items` is already ELO-descending, so filtering preserves that order.
+        favoriteGenreFilms = items
+            .filter { genresByItem[$0.id]?.contains(topGenre) == true }
+            .compactMap { mediaByItem[$0.id] }
+    }
+
+    /// Weighted by ELO score, not raw frequency — a film ranked #1 pulls harder toward its
+    /// genres/cast than one ranked #24, so this reflects actual favorites rather than just
+    /// whatever shows up most often across 25 ranked items regardless of how they scored.
+    private func loadTasteProfile(items: [RankedItem]) async {
+        struct PersonTally { var person: TMDBPerson; var score: Double }
+        var genreScore: [String: Double] = [:]
+        var directorScore: [Int: PersonTally] = [:]
+        var actorScore: [Int: PersonTally] = [:]
+
+        await withTaskGroup(of: (Double, [String], TMDBPerson?, [TMDBPerson]).self) { group in
             for item in items {
                 let tmdbID = item.tmdbID
                 let mediaType = item.mediaType
+                let elo = item.eloScore
                 group.addTask {
                     var genres: [String] = []
-                    var director: String? = nil
-                    var actors: [String] = []
+                    var director: TMDBPerson? = nil
+                    var actors: [TMDBPerson] = []
                     if let media = try? await TMDBClient.shared.details(tmdbID: tmdbID, mediaType: mediaType) {
                         genres = media.genreNames
                     }
                     if let credits = try? await TMDBClient.shared.credits(tmdbID: tmdbID, mediaType: mediaType) {
-                        director = credits.crew.first(where: { $0.job == "Director" })?.name
-                        actors = credits.cast.prefix(3).map(\.name)
+                        director = credits.crew.first(where: { $0.job == "Director" })
+                        actors = Array(credits.cast.prefix(3))
                     }
-                    return (genres, director, actors)
+                    return (elo, genres, director, actors)
                 }
             }
-            for await (genres, director, actors) in group {
-                for g in genres { genreFreq[g, default: 0] += 1 }
-                if let d = director { directorFreq[d, default: 0] += 1 }
-                for a in actors { actorFreq[a, default: 0] += 1 }
+            for await (elo, genres, director, actors) in group {
+                for g in genres { genreScore[g, default: 0] += elo }
+                if let d = director {
+                    if directorScore[d.id] != nil { directorScore[d.id]!.score += elo }
+                    else { directorScore[d.id] = PersonTally(person: d, score: elo) }
+                }
+                for a in actors {
+                    if actorScore[a.id] != nil { actorScore[a.id]!.score += elo }
+                    else { actorScore[a.id] = PersonTally(person: a, score: elo) }
+                }
             }
         }
 
-        let topGenres = Array(genreFreq.sorted { $0.value > $1.value }.prefix(3).map(\.key))
-        let topDirector = directorFreq.sorted { $0.value > $1.value }.first?.key
-        let topActors = Array(actorFreq.sorted { $0.value > $1.value }.prefix(3).map(\.key))
-        tasteProfile = TasteProfile(topGenres: topGenres, favoriteDirector: topDirector, favoriteActors: topActors)
+        let topGenres = Array(genreScore.sorted { $0.value > $1.value }.prefix(3).map(\.key))
+        let topDirector = directorScore.values.max(by: { $0.score < $1.score })
+        let topActors = actorScore.values.sorted { $0.score > $1.score }.prefix(3)
+
+        tasteProfile = TasteProfile(
+            topGenres: topGenres,
+            favoriteDirector: topDirector.map { TasteProfile.WeightedPerson(id: $0.person.id, name: $0.person.name, profilePath: $0.person.profilePath) },
+            favoriteActors: topActors.map { TasteProfile.WeightedPerson(id: $0.person.id, name: $0.person.name, profilePath: $0.person.profilePath) }
+        )
     }
 }
 
@@ -128,12 +264,20 @@ final class ProfileViewModel {
 struct ProfileView: View {
     @Environment(AppState.self) private var appState
     @State private var vm = ProfileViewModel()
-    @State private var showShareCard = false
     @State private var showFollowers = false
     @State private var showFollowing = false
     @State private var showSettings = false
     @State private var showPeopleSearch = false
+    @State private var showEditProfile = false
+    @State private var carouselPage = 0
+    @State private var favoritesTab: FavoritesTab = .activity
     @AppStorage("cinema_dev_fingerprint") private var devFingerprintUnlocked = false
+
+    private static let memberSinceFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMMM yyyy"
+        return f
+    }()
 
     var body: some View {
         ZStack {
@@ -146,8 +290,8 @@ struct ProfileView: View {
                     VStack(spacing: 0) {
                         profileHeader
                         socialStats
-                        topFilmsSection
-                        filmFingerprintSection
+                        filmCarouselSection
+                        favoritesTabSection
                         Spacer().frame(height: 100)
                     }
                 }
@@ -188,11 +332,13 @@ struct ProfileView: View {
         .sheet(isPresented: $showFollowing) {
             FollowListView(mode: .following, userID: appState.currentUser?.id)
         }
-        .sheet(isPresented: $showShareCard) {
-            ShareCardView(films: vm.topFilms, user: appState.currentUser)
-        }
         .sheet(isPresented: $showSettings) {
             SettingsView(appState: appState)
+        }
+        .sheet(isPresented: $showEditProfile) {
+            if let user = appState.currentUser {
+                EditProfileView(user: user)
+            }
         }
     }
 
@@ -200,18 +346,32 @@ struct ProfileView: View {
 
     private var profileHeader: some View {
         VStack(spacing: 14) {
-            // Avatar
-            ZStack {
-                Circle()
-                    .fill(CinemaTheme.Colors.surface)
+            // Avatar — tap the pencil badge to edit
+            Button { showEditProfile = true } label: {
+                ZStack {
+                    Group {
+                        if let urlString = appState.currentUser?.avatarURL, let url = URL(string: urlString) {
+                            AsyncImage(url: url) { phase in
+                                if case .success(let img) = phase { img.resizable().aspectRatio(contentMode: .fill) }
+                                else { avatarInitial }
+                            }
+                        } else {
+                            avatarInitial
+                        }
+                    }
                     .frame(width: 88, height: 88)
+                    .clipShape(Circle())
                     .overlay(Circle().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
-                Text(appState.currentUser?.displayName?.prefix(1).uppercased()
-                     ?? appState.currentUser?.username.prefix(1).uppercased()
-                     ?? "?")
-                    .font(.system(size: 36, weight: .bold))
-                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+
+                    Circle()
+                        .fill(CinemaTheme.Colors.gold)
+                        .frame(width: 26, height: 26)
+                        .overlay(Image(systemName: "pencil").font(.system(size: 11, weight: .semibold)).foregroundStyle(.black))
+                        .overlay(Circle().strokeBorder(CinemaTheme.Colors.background, lineWidth: 2))
+                        .offset(x: 31, y: 31)
+                }
             }
+            .buttonStyle(.plain)
             .padding(.top, 16)
 
             VStack(spacing: 5) {
@@ -221,25 +381,49 @@ struct ProfileView: View {
                 Text("@\(appState.currentUser?.username ?? "")")
                     .font(.system(size: 15))
                     .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                if let bio = appState.currentUser?.bio, !bio.isEmpty {
+                    Text(bio)
+                        .font(.system(size: 13))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                        .padding(.top, 2)
+                }
+                if let createdAt = appState.currentUser?.createdAt {
+                    Text("Member since \(Self.memberSinceFormatter.string(from: createdAt))")
+                        .font(.system(size: 12))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.6))
+                        .padding(.top, 4)
+                }
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.bottom, 28)
     }
 
+    private var avatarInitial: some View {
+        CinemaTheme.Colors.surface.overlay(
+            Text(appState.currentUser?.displayName?.prefix(1).uppercased()
+                 ?? appState.currentUser?.username.prefix(1).uppercased()
+                 ?? "?")
+                .font(.system(size: 36, weight: .bold))
+                .foregroundStyle(CinemaTheme.Colors.textPrimary)
+        )
+    }
+
     // MARK: - Social Stats
 
     private var socialStats: some View {
         HStack(spacing: 0) {
-            StatCell(value: "\(vm.rankedCount)", label: "Ranked", tappable: false) {}
+            StatCell(value: "\(vm.followerCount)", label: "Followers", tappable: true) {
+                showFollowers = true
+            }
 
             Rectangle()
                 .fill(CinemaTheme.Colors.border)
                 .frame(width: 1, height: 40)
 
-            StatCell(value: "\(vm.followerCount)", label: "Followers", tappable: true) {
-                showFollowers = true
-            }
+            StatCell(value: "\(vm.rankedCount)", label: "Ranked", tappable: false) {}
 
             Rectangle()
                 .fill(CinemaTheme.Colors.border)
@@ -253,37 +437,132 @@ struct ProfileView: View {
         .padding(.bottom, 36)
     }
 
-    // MARK: - Top Films
+    // MARK: - Film Carousel (Top Films / Least Liked / Favorite Genre)
 
-    private var topFilmsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private enum CarouselPage { case topFilms, leastLiked, favoriteGenre }
+
+    private var carouselPages: [CarouselPage] {
+        var pages: [CarouselPage] = [.topFilms]
+        if !vm.leastLikedFilms.isEmpty { pages.append(.leastLiked) }
+        if !vm.favoriteGenreFilms.isEmpty { pages.append(.favoriteGenre) }
+        return pages
+    }
+
+    private func carouselTitle(_ page: CarouselPage) -> String {
+        switch page {
+        case .topFilms: return "Top Films"
+        case .leastLiked: return "Least Liked"
+        case .favoriteGenre: return "Favorite Genre"
+        }
+    }
+
+    // The share button used to float on top of the poster grid itself — moved up here,
+    // level with "Swipe for more", so it reads as a control for the carousel rather than
+    // a stamp on the posters.
+    private var currentShareContent: StoryShareContent? {
+        guard carouselPage < carouselPages.count else { return nil }
+        switch carouselPages[carouselPage] {
+        case .topFilms:
+            return vm.topFilms.isEmpty ? nil : .posterGrid(films: vm.topFilms, title: "Top Films")
+        case .leastLiked:
+            return vm.leastLikedFilms.isEmpty ? nil : .posterGrid(films: vm.leastLikedFilms, title: "Least Liked")
+        case .favoriteGenre:
+            return vm.favoriteGenreFilms.isEmpty ? nil : .posterGrid(films: vm.favoriteGenreFilms, title: vm.favoriteGenre ?? "Favorite Genre")
+        }
+    }
+
+    private var filmCarouselSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center) {
-                Text("Top Films")
+                Text(carouselTitle(carouselPage < carouselPages.count ? carouselPages[carouselPage] : .topFilms))
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(CinemaTheme.Colors.textPrimary)
                 Spacer()
-                if !vm.topFilms.isEmpty {
-                    Button {
-                        showShareCard = true
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 12, weight: .semibold))
-                            Text("Share")
-                                .font(.system(size: 13, weight: .semibold))
+                if carouselPages.count > 1 {
+                    HStack(spacing: 6) {
+                        ForEach(carouselPages.indices, id: \.self) { i in
+                            Circle()
+                                .fill(i == carouselPage ? CinemaTheme.Colors.gold : CinemaTheme.Colors.border)
+                                .frame(width: 6, height: 6)
                         }
-                        .foregroundStyle(CinemaTheme.Colors.gold)
                     }
                 }
             }
             .padding(.horizontal, CinemaTheme.Spacing.lg)
+            .animation(.easeInOut(duration: 0.15), value: carouselPage)
 
-            if vm.topFilms.isEmpty {
-                Text("Rank 9 films to see your top grid.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                    .padding(.horizontal, CinemaTheme.Spacing.lg)
-                    .padding(.bottom, 8)
+            HStack {
+                if carouselPages.count > 1 {
+                    Text("Swipe for more")
+                        .font(.system(size: 11))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.7))
+                }
+                Spacer()
+                if let content = currentShareContent {
+                    shareButton {
+                        Task { await StoryShareService.share(content, user: appState.currentUser) }
+                    }
+                }
+            }
+            .padding(.horizontal, CinemaTheme.Spacing.lg)
+            .frame(minHeight: 20)
+
+            TabView(selection: $carouselPage) {
+                ForEach(carouselPages.indices, id: \.self) { i in
+                    carouselCard(for: carouselPages[i]).tag(i)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .aspectRatio(2/3, contentMode: .fit)
+            .padding(.horizontal, CinemaTheme.Spacing.lg)
+            .onChange(of: carouselPages.count) { _, newCount in
+                if carouselPage >= newCount { carouselPage = 0 }
+            }
+        }
+        .padding(.bottom, 36)
+    }
+
+    // Every page is a poster grid with an optional corner badge — Top Films badges its #1,
+    // Favorite Genre badges the genre name on the film that earned it, Least Liked has no
+    // badge. Keeping all three on one component is deliberate: the first version gave
+    // Favorite Genre a bespoke "one word floating in a dark box" layout and it read as an
+    // empty, unfinished page next to the other two real poster grids.
+    @ViewBuilder
+    private func carouselCard(for page: CarouselPage) -> some View {
+        switch page {
+        case .topFilms:
+            posterGridCard(
+                films: vm.topFilms,
+                cornerBadge: { i in i == 0 ? "#1" : nil },
+                emptyText: "Rank 9 films to see your top grid."
+            )
+        case .leastLiked:
+            posterGridCard(
+                films: vm.leastLikedFilms,
+                cornerBadge: { _ in nil },
+                emptyText: "Rank more films to see this."
+            )
+        case .favoriteGenre:
+            posterGridCard(
+                films: vm.favoriteGenreFilms,
+                cornerBadge: { i in i == 0 ? vm.favoriteGenre?.uppercased() : nil },
+                emptyText: "Rank a few more films to see your favorite genre."
+            )
+        }
+    }
+
+    private func posterGridCard(films: [MediaItem], cornerBadge: @escaping (Int) -> String?, emptyText: String) -> some View {
+        Group {
+            if films.isEmpty {
+                RoundedRectangle(cornerRadius: CinemaTheme.Radius.md)
+                    .fill(CinemaTheme.Colors.surface)
+                    .overlay(
+                        Text(emptyText)
+                            .font(.system(size: 13))
+                            .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(24)
+                    )
             } else {
                 LazyVGrid(
                     columns: [
@@ -293,12 +572,12 @@ struct ProfileView: View {
                     ],
                     spacing: 2
                 ) {
-                    ForEach(Array(vm.topFilms.prefix(9).enumerated()), id: \.element.id) { i, film in
+                    ForEach(Array(films.prefix(9).enumerated()), id: \.element.id) { i, film in
                         ZStack(alignment: .topLeading) {
                             PosterImage(path: film.posterPath, cornerRadius: 0)
                                 .aspectRatio(2/3, contentMode: .fit)
-                            if i == 0 {
-                                Text("#1")
+                            if let badge = cornerBadge(i) {
+                                Text(badge)
                                     .font(.system(size: 11, weight: .black))
                                     .foregroundStyle(.black)
                                     .padding(.horizontal, 6)
@@ -306,34 +585,110 @@ struct ProfileView: View {
                                     .background(CinemaTheme.Colors.gold)
                                     .clipShape(RoundedRectangle(cornerRadius: 4))
                                     .padding(6)
+                                    .lineLimit(1)
                             }
                         }
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
-                .padding(.horizontal, CinemaTheme.Spacing.lg)
+            }
+        }
+    }
+
+    private func shareButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "square.and.arrow.up")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 30, height: 30)
+                .background(.black.opacity(0.55))
+                .clipShape(Circle())
+        }
+        .accessibilityLabel("Share")
+    }
+
+    // MARK: - Activity / Taste Profile
+
+    private enum FavoritesTab: CaseIterable { case activity, tasteProfile }
+
+    private func favoritesTabLabel(_ tab: FavoritesTab) -> String {
+        switch tab {
+        case .activity: return "Your Activity"
+        case .tasteProfile: return "Taste Profile"
+        }
+    }
+
+    private func favoritesTabIcon(_ tab: FavoritesTab) -> String {
+        switch tab {
+        case .activity: return "doc.text.image"
+        case .tasteProfile: return "chart.bar.fill"
+        }
+    }
+
+    private var favoritesTabSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
+                ForEach(FavoritesTab.allCases, id: \.self) { tab in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) { favoritesTab = tab }
+                    } label: {
+                        VStack(spacing: 8) {
+                            HStack(spacing: 6) {
+                                Image(systemName: favoritesTabIcon(tab)).font(.system(size: 13))
+                                Text(favoritesTabLabel(tab)).font(.system(size: 14, weight: .semibold))
+                            }
+                            .foregroundStyle(favoritesTab == tab ? CinemaTheme.Colors.textPrimary : CinemaTheme.Colors.textSecondary)
+                            Rectangle()
+                                .fill(favoritesTab == tab ? CinemaTheme.Colors.gold : .clear)
+                                .frame(height: 2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.horizontal, CinemaTheme.Spacing.lg)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(CinemaTheme.Colors.border).frame(height: 1)
+            }
+            .padding(.bottom, 20)
+
+            if favoritesTab == .activity {
+                activityContent
+            } else {
+                tasteProfileContent
             }
         }
         .padding(.bottom, 36)
     }
 
-    // MARK: - Film Favorites
-
-    private var filmFingerprintSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Film Favorites")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                Spacer()
-                if !devFingerprintUnlocked && vm.rankedCount < 25 {
-                    Text("\(vm.rankedCount) of 25")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+    // Post-card layout, not a plain list — same information a friend's post carries in the
+    // Feed tab (poster, who, when, title, score, note, reaction row), just filtered to you.
+    private var activityContent: some View {
+        VStack(spacing: 12) {
+            if vm.recentActivity.isEmpty {
+                Text("Rank a film to see your activity here.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                    .padding(.horizontal, CinemaTheme.Spacing.lg)
+            } else {
+                ForEach(vm.recentActivity) { entry in
+                    ActivityPostCard(entry: entry, user: appState.currentUser)
+                        .padding(.horizontal, CinemaTheme.Spacing.lg)
                 }
             }
-            .padding(.horizontal, CinemaTheme.Spacing.lg)
-            .padding(.bottom, 16)
+        }
+    }
+
+    private var tasteProfileContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if !devFingerprintUnlocked && vm.rankedCount < 25 {
+                Text("\(vm.rankedCount) of 25 films ranked")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                    .padding(.horizontal, CinemaTheme.Spacing.lg)
+                    .padding(.bottom, 16)
+            }
 
             if devFingerprintUnlocked {
                 unlockedFingerprintView(TasteProfile.mock)
@@ -350,7 +705,6 @@ struct ProfileView: View {
                 unlockedFingerprintView(profile)
             }
         }
-        .padding(.bottom, 36)
     }
 
     private var lockedFingerprintView: some View {
@@ -377,47 +731,102 @@ struct ProfileView: View {
         }
     }
 
+    // Both subsections now share one visual language — caption label above, real content
+    // below, own card — instead of the old side-by-side "label column + inline chips" row
+    // that was designed for a cramped single-column section and never got wider once this
+    // moved into its own full-width tab.
     private func unlockedFingerprintView(_ profile: TasteProfile) -> some View {
-        VStack(spacing: 1) {
+        VStack(alignment: .leading, spacing: 20) {
             if !profile.topGenres.isEmpty {
-                FingerprintRow(label: "Genres") {
-                    HStack(spacing: 8) {
-                        ForEach(profile.topGenres, id: \.self) { genre in
-                            Text(genre)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(CinemaTheme.Colors.surface)
-                                .clipShape(Capsule())
-                                .overlay(Capsule().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("GENRES")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                        .padding(.horizontal, CinemaTheme.Spacing.lg)
+
+                    HStack(spacing: 10) {
+                        ForEach(Array(profile.topGenres.enumerated()), id: \.element) { i, genre in
+                            HStack(spacing: 6) {
+                                Text("#\(i + 1)")
+                                    .font(.system(size: 12, weight: .black))
+                                    .foregroundStyle(CinemaTheme.Colors.gold)
+                                Text(genre)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(CinemaTheme.Colors.surface)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
                         }
-                        Spacer()
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, CinemaTheme.Spacing.lg)
+                }
+            }
+
+            if profile.favoriteDirector != nil || !profile.favoriteActors.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("DIRECTOR & CAST")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                        .padding(.horizontal, CinemaTheme.Spacing.lg)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 20) {
+                            if let director = profile.favoriteDirector {
+                                PersonAvatarCard(person: director, roleLabel: "Director", size: 84)
+                            }
+                            ForEach(profile.favoriteActors) { actor in
+                                PersonAvatarCard(person: actor, roleLabel: nil, size: 84)
+                            }
+                        }
+                        .padding(.horizontal, CinemaTheme.Spacing.lg)
                     }
                 }
             }
-
-            if let director = profile.favoriteDirector {
-                FingerprintRow(label: "Director") {
-                    Text(director)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                }
-            }
-
-            if !profile.favoriteActors.isEmpty {
-                FingerprintRow(label: "Starring") {
-                    Text(profile.favoriteActors.joined(separator: "  ·  "))
-                        .font(.system(size: 14))
-                        .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                        .lineLimit(2)
-                }
-            }
         }
-        .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
-        .padding(.horizontal, CinemaTheme.Spacing.lg)
     }
 
+}
+
+// MARK: - Person Avatar Card (Director & Cast — same treatment as MovieInfoView's Cast & Crew)
+
+private struct PersonAvatarCard: View {
+    let person: TasteProfile.WeightedPerson
+    var roleLabel: String? = nil
+    var size: CGFloat = 72
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Group {
+                if let path = person.profilePath, let url = TMDBClient.shared.profileImageURL(path: path) {
+                    AsyncImage(url: url) { phase in
+                        if case .success(let img) = phase { img.resizable().aspectRatio(contentMode: .fill) }
+                        else { placeholder }
+                    }
+                } else { placeholder }
+            }
+            .frame(width: size, height: size).clipShape(Circle())
+            .overlay(Circle().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
+
+            VStack(spacing: 2) {
+                Text(person.name).font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(CinemaTheme.Colors.textPrimary).lineLimit(2).multilineTextAlignment(.center)
+                if let roleLabel {
+                    Text(roleLabel).font(.system(size: 11)).foregroundStyle(CinemaTheme.Colors.textSecondary).lineLimit(1)
+                }
+            }
+            .frame(width: 80)
+        }
+    }
+
+    private var placeholder: some View {
+        CinemaTheme.Colors.surface.overlay(
+            Image(systemName: "person.fill").font(.system(size: 28)).foregroundStyle(CinemaTheme.Colors.border)
+        )
+    }
 }
 
 // MARK: - Settings
@@ -427,6 +836,10 @@ struct SettingsView: View {
     @AppStorage("cinema_dev_fingerprint") private var devFingerprintUnlocked = false
     @AppStorage("cinema_dev_scores_unlocked") private var devScoresUnlocked = false
     @Environment(\.dismiss) private var dismiss
+    @State private var showEditProfile = false
+    @State private var showDeleteConfirm = false
+    @State private var isDeletingAccount = false
+    @State private var deleteErrorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -438,6 +851,10 @@ struct SettingsView: View {
 
                         // Account
                         SettingsSection(title: "Account") {
+                            SettingsRow(icon: "person.crop.circle", iconColor: CinemaTheme.Colors.gold, label: "Edit Profile") {
+                                showEditProfile = true
+                            }
+                            Divider().background(CinemaTheme.Colors.border).padding(.leading, 52)
                             SettingsRow(icon: "key.fill", iconColor: CinemaTheme.Colors.gold, label: "Change Password", note: "Coming soon", disabled: true) {}
                             Divider().background(CinemaTheme.Colors.border).padding(.leading, 52)
                             SettingsRow(icon: "bell.fill", iconColor: .blue, label: "Notifications", note: "Coming soon", disabled: true) {}
@@ -539,6 +956,36 @@ struct SettingsView: View {
                             .strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
                         .padding(.horizontal, CinemaTheme.Spacing.lg)
 
+                        // Delete Account — kept separate from Sign Out, own section, so it
+                        // can't be mis-tapped reaching for the (much more common) sign-out row.
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("DANGER ZONE")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                                .padding(.horizontal, CinemaTheme.Spacing.lg)
+
+                            Button {
+                                showDeleteConfirm = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "trash.fill")
+                                        .font(.system(size: 16))
+                                    Text("Delete Account")
+                                        .font(.system(size: 16))
+                                    Spacer()
+                                }
+                                .foregroundStyle(.red)
+                                .padding(.horizontal, CinemaTheme.Spacing.lg)
+                                .padding(.vertical, 16)
+                            }
+                            .background(CinemaTheme.Colors.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
+                            .overlay(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md)
+                                .strokeBorder(Color.red.opacity(0.3), lineWidth: 1))
+                            .padding(.horizontal, CinemaTheme.Spacing.lg)
+                            .disabled(isDeletingAccount)
+                        }
+
                         Spacer().frame(height: 40)
                     }
                     .padding(.top, 20)
@@ -552,7 +999,51 @@ struct SettingsView: View {
                         .foregroundStyle(CinemaTheme.Colors.gold)
                 }
             }
+            .sheet(isPresented: $showEditProfile) {
+                if let user = appState.currentUser {
+                    EditProfileView(user: user)
+                }
+            }
+            .confirmationDialog(
+                "Delete your account?",
+                isPresented: $showDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Account", role: .destructive) {
+                    Task { await performDelete() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This permanently deletes your account, every ranking, and your follows. This can't be undone.")
+            }
+            .alert("Couldn't Delete Account", isPresented: Binding(
+                get: { deleteErrorMessage != nil },
+                set: { if !$0 { deleteErrorMessage = nil } }
+            )) {
+                Button("OK") { deleteErrorMessage = nil }
+            } message: {
+                Text(deleteErrorMessage ?? "")
+            }
+            .overlay {
+                if isDeletingAccount {
+                    ZStack {
+                        Color.black.opacity(0.6).ignoresSafeArea()
+                        ProgressView().tint(CinemaTheme.Colors.gold)
+                    }
+                }
+            }
         }
+    }
+
+    private func performDelete() async {
+        isDeletingAccount = true
+        let success = await appState.deleteAccount()
+        isDeletingAccount = false
+        if !success {
+            deleteErrorMessage = "Something went wrong. Check your connection and try again."
+        }
+        // On success, AppState.isAuthenticated flips to false and RootView swaps to the
+        // auth screen on its own — no explicit dismiss needed here.
     }
 }
 
@@ -619,6 +1110,104 @@ private struct SettingsRow: View {
     }
 }
 
+// MARK: - Activity Row
+
+// Same shape as Feed's PopCard (poster spanning the card, header/title/note/reactions in
+// a text column) — just re-skinned in CinemaTheme's dark palette instead of Marquee's warm
+// one, and reactions render inert since there's no likes/comments backend on rankings yet.
+private struct ActivityPostCard: View {
+    let entry: ActivityEntry
+    let user: CinemaUser?
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return f
+    }()
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            PosterImage(path: entry.media.posterPath, cornerRadius: 12)
+                .frame(width: 84, height: 126)
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    avatar
+                    Text(user?.displayName ?? user?.username ?? "You")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                    Text("· \(Self.relativeFormatter.localizedString(for: entry.updatedAt, relativeTo: Date()))")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                }
+
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(entry.media.title)
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                        .lineLimit(2)
+                    Spacer(minLength: 4)
+                    if let rating = entry.ratingOutOf10 {
+                        Text(String(format: "%.1f", rating))
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(CinemaTheme.Colors.gold, in: RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+
+                if let note = entry.note {
+                    Text(note)
+                        .font(.system(size: 13))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: 18) {
+                    Image(systemName: "heart")
+                    Image(systemName: "bubble.right")
+                    Image(systemName: "paperplane")
+                }
+                .font(.system(size: 15))
+                .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.7))
+            }
+            .frame(height: 126, alignment: .top)
+        }
+        .padding(14)
+        .background(CinemaTheme.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private var avatar: some View {
+        ZStack {
+            if let urlString = user?.avatarURL, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    if case .success(let img) = phase { img.resizable().aspectRatio(contentMode: .fill) }
+                    else { avatarInitial }
+                }
+            } else {
+                avatarInitial
+            }
+        }
+        .frame(width: 20, height: 20)
+        .clipShape(Circle())
+    }
+
+    private var avatarInitial: some View {
+        CinemaTheme.Colors.background.overlay(
+            Text((user?.displayName ?? user?.username ?? "?").prefix(1).uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(CinemaTheme.Colors.textPrimary)
+        )
+    }
+}
+
 // MARK: - Supporting Views
 
 private struct StatCell: View {
@@ -640,25 +1229,6 @@ private struct StatCell: View {
             .frame(maxWidth: .infinity)
         }
         .disabled(!tappable)
-    }
-}
-
-private struct FingerprintRow<Content: View>: View {
-    let label: String
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Text(label)
-                .font(.system(size: 13))
-                .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                .frame(width: 64, alignment: .leading)
-            content()
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(CinemaTheme.Colors.surface)
     }
 }
 
