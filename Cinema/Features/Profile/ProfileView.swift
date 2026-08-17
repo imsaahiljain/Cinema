@@ -456,6 +456,21 @@ struct ProfileView: View {
         }
     }
 
+    // The share button used to float on top of the poster grid itself — moved up here,
+    // level with "Swipe for more", so it reads as a control for the carousel rather than
+    // a stamp on the posters.
+    private var currentShareContent: StoryShareContent? {
+        guard carouselPage < carouselPages.count else { return nil }
+        switch carouselPages[carouselPage] {
+        case .topFilms:
+            return vm.topFilms.isEmpty ? nil : .posterGrid(films: vm.topFilms, title: "Top Films")
+        case .leastLiked:
+            return vm.leastLikedFilms.isEmpty ? nil : .posterGrid(films: vm.leastLikedFilms, title: "Least Liked")
+        case .favoriteGenre:
+            return vm.favoriteGenreFilms.isEmpty ? nil : .posterGrid(films: vm.favoriteGenreFilms, title: vm.favoriteGenre ?? "Favorite Genre")
+        }
+    }
+
     private var filmCarouselSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center) {
@@ -476,12 +491,21 @@ struct ProfileView: View {
             .padding(.horizontal, CinemaTheme.Spacing.lg)
             .animation(.easeInOut(duration: 0.15), value: carouselPage)
 
-            if carouselPages.count > 1 {
-                Text("Swipe for more")
-                    .font(.system(size: 11))
-                    .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.7))
-                    .padding(.horizontal, CinemaTheme.Spacing.lg)
+            HStack {
+                if carouselPages.count > 1 {
+                    Text("Swipe for more")
+                        .font(.system(size: 11))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.7))
+                }
+                Spacer()
+                if let content = currentShareContent {
+                    shareButton {
+                        Task { await StoryShareService.share(content, user: appState.currentUser) }
+                    }
+                }
             }
+            .padding(.horizontal, CinemaTheme.Spacing.lg)
+            .frame(minHeight: 20)
 
             TabView(selection: $carouselPage) {
                 ForEach(carouselPages.indices, id: \.self) { i in
@@ -510,28 +534,25 @@ struct ProfileView: View {
             posterGridCard(
                 films: vm.topFilms,
                 cornerBadge: { i in i == 0 ? "#1" : nil },
-                emptyText: "Rank 9 films to see your top grid.",
-                shareTitle: "Top Films"
+                emptyText: "Rank 9 films to see your top grid."
             )
         case .leastLiked:
             posterGridCard(
                 films: vm.leastLikedFilms,
                 cornerBadge: { _ in nil },
-                emptyText: "Rank more films to see this.",
-                shareTitle: "Least Liked"
+                emptyText: "Rank more films to see this."
             )
         case .favoriteGenre:
             posterGridCard(
                 films: vm.favoriteGenreFilms,
                 cornerBadge: { i in i == 0 ? vm.favoriteGenre?.uppercased() : nil },
-                emptyText: "Rank a few more films to see your favorite genre.",
-                shareTitle: vm.favoriteGenre ?? "Favorite Genre"
+                emptyText: "Rank a few more films to see your favorite genre."
             )
         }
     }
 
-    private func posterGridCard(films: [MediaItem], cornerBadge: @escaping (Int) -> String?, emptyText: String, shareTitle: String) -> some View {
-        ZStack(alignment: .topTrailing) {
+    private func posterGridCard(films: [MediaItem], cornerBadge: @escaping (Int) -> String?, emptyText: String) -> some View {
+        Group {
             if films.isEmpty {
                 RoundedRectangle(cornerRadius: CinemaTheme.Radius.md)
                     .fill(CinemaTheme.Colors.surface)
@@ -570,11 +591,6 @@ struct ProfileView: View {
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
-
-                shareButton {
-                    StoryShareService.share(.posterGrid(films: films, title: shareTitle), user: appState.currentUser)
-                }
-                .padding(8)
             }
         }
     }
@@ -597,7 +613,7 @@ struct ProfileView: View {
 
     private func favoritesTabLabel(_ tab: FavoritesTab) -> String {
         switch tab {
-        case .activity: return "Activity"
+        case .activity: return "Your Activity"
         case .tasteProfile: return "Taste Profile"
         }
     }
@@ -646,8 +662,10 @@ struct ProfileView: View {
         .padding(.bottom, 36)
     }
 
+    // Post-card layout, not a plain list — same information a friend's post carries in the
+    // Feed tab (poster, who, when, title, score, note, reaction row), just filtered to you.
     private var activityContent: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 12) {
             if vm.recentActivity.isEmpty {
                 Text("Rank a film to see your activity here.")
                     .font(.system(size: 14))
@@ -655,13 +673,8 @@ struct ProfileView: View {
                     .padding(.horizontal, CinemaTheme.Spacing.lg)
             } else {
                 ForEach(vm.recentActivity) { entry in
-                    ActivityRow(entry: entry)
-                    if entry.id != vm.recentActivity.last?.id {
-                        Rectangle()
-                            .fill(CinemaTheme.Colors.border)
-                            .frame(height: 1)
-                            .padding(.leading, CinemaTheme.Spacing.lg + 60)
-                    }
+                    ActivityPostCard(entry: entry, user: appState.currentUser)
+                        .padding(.horizontal, CinemaTheme.Spacing.lg)
                 }
             }
         }
@@ -718,23 +731,38 @@ struct ProfileView: View {
         }
     }
 
+    // Both subsections now share one visual language — caption label above, real content
+    // below, own card — instead of the old side-by-side "label column + inline chips" row
+    // that was designed for a cramped single-column section and never got wider once this
+    // moved into its own full-width tab.
     private func unlockedFingerprintView(_ profile: TasteProfile) -> some View {
-        VStack(spacing: 1) {
+        VStack(alignment: .leading, spacing: 20) {
             if !profile.topGenres.isEmpty {
-                FingerprintRow(label: "Genres") {
-                    HStack(spacing: 8) {
-                        ForEach(profile.topGenres, id: \.self) { genre in
-                            Text(genre)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(CinemaTheme.Colors.surface)
-                                .clipShape(Capsule())
-                                .overlay(Capsule().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("GENRES")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                        .padding(.horizontal, CinemaTheme.Spacing.lg)
+
+                    HStack(spacing: 10) {
+                        ForEach(Array(profile.topGenres.enumerated()), id: \.element) { i, genre in
+                            HStack(spacing: 6) {
+                                Text("#\(i + 1)")
+                                    .font(.system(size: 12, weight: .black))
+                                    .foregroundStyle(CinemaTheme.Colors.gold)
+                                Text(genre)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(CinemaTheme.Colors.surface)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
                         }
-                        Spacer()
+                        Spacer(minLength: 0)
                     }
+                    .padding(.horizontal, CinemaTheme.Spacing.lg)
                 }
             }
 
@@ -743,26 +771,22 @@ struct ProfileView: View {
                     Text("DIRECTOR & CAST")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, CinemaTheme.Spacing.lg)
 
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 16) {
+                        HStack(spacing: 20) {
                             if let director = profile.favoriteDirector {
-                                PersonAvatarCard(person: director, roleLabel: "Director")
+                                PersonAvatarCard(person: director, roleLabel: "Director", size: 84)
                             }
                             ForEach(profile.favoriteActors) { actor in
-                                PersonAvatarCard(person: actor, roleLabel: nil)
+                                PersonAvatarCard(person: actor, roleLabel: nil, size: 84)
                             }
                         }
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, CinemaTheme.Spacing.lg)
                     }
                 }
-                .padding(.vertical, 14)
-                .background(CinemaTheme.Colors.surface)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
-        .padding(.horizontal, CinemaTheme.Spacing.lg)
     }
 
 }
@@ -772,6 +796,7 @@ struct ProfileView: View {
 private struct PersonAvatarCard: View {
     let person: TasteProfile.WeightedPerson
     var roleLabel: String? = nil
+    var size: CGFloat = 72
 
     var body: some View {
         VStack(spacing: 8) {
@@ -783,14 +808,14 @@ private struct PersonAvatarCard: View {
                     }
                 } else { placeholder }
             }
-            .frame(width: 72, height: 72).clipShape(Circle())
+            .frame(width: size, height: size).clipShape(Circle())
             .overlay(Circle().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
 
             VStack(spacing: 2) {
-                Text(person.name).font(.system(size: 11, weight: .semibold))
+                Text(person.name).font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(CinemaTheme.Colors.textPrimary).lineLimit(2).multilineTextAlignment(.center)
                 if let roleLabel {
-                    Text(roleLabel).font(.system(size: 10)).foregroundStyle(CinemaTheme.Colors.textSecondary).lineLimit(1)
+                    Text(roleLabel).font(.system(size: 11)).foregroundStyle(CinemaTheme.Colors.textSecondary).lineLimit(1)
                 }
             }
             .frame(width: 80)
@@ -1087,8 +1112,12 @@ private struct SettingsRow: View {
 
 // MARK: - Activity Row
 
-private struct ActivityRow: View {
+// Same shape as Feed's PopCard (poster spanning the card, header/title/note/reactions in
+// a text column) — just re-skinned in CinemaTheme's dark palette instead of Marquee's warm
+// one, and reactions render inert since there's no likes/comments backend on rankings yet.
+private struct ActivityPostCard: View {
     let entry: ActivityEntry
+    let user: CinemaUser?
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -1098,35 +1127,84 @@ private struct ActivityRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            PosterImage(path: entry.media.posterPath, cornerRadius: CinemaTheme.Radius.sm)
-                .frame(width: 46, height: 69)
+            PosterImage(path: entry.media.posterPath, cornerRadius: 12)
+                .frame(width: 84, height: 126)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.media.title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                    .lineLimit(2)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    avatar
+                    Text(user?.displayName ?? user?.username ?? "You")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                    Text("· \(Self.relativeFormatter.localizedString(for: entry.updatedAt, relativeTo: Date()))")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                }
+
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(entry.media.title)
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                        .lineLimit(2)
+                    Spacer(minLength: 4)
+                    if let rating = entry.ratingOutOf10 {
+                        Text(String(format: "%.1f", rating))
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(CinemaTheme.Colors.gold, in: RoundedRectangle(cornerRadius: 6))
+                    }
+                }
+
                 if let note = entry.note {
                     Text(note)
                         .font(.system(size: 13))
                         .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                        .lineLimit(2)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(Self.relativeFormatter.localizedString(for: entry.updatedAt, relativeTo: Date()))
-                    .font(.system(size: 11))
-                    .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.6))
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: 18) {
+                    Image(systemName: "heart")
+                    Image(systemName: "bubble.right")
+                    Image(systemName: "paperplane")
+                }
+                .font(.system(size: 15))
+                .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.7))
             }
+            .frame(height: 126, alignment: .top)
+        }
+        .padding(14)
+        .background(CinemaTheme.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
+    }
 
-            Spacer(minLength: 8)
-
-            if let rating = entry.ratingOutOf10 {
-                Text(String(format: "%.1f", rating))
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(CinemaTheme.Colors.gold)
+    @ViewBuilder
+    private var avatar: some View {
+        ZStack {
+            if let urlString = user?.avatarURL, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    if case .success(let img) = phase { img.resizable().aspectRatio(contentMode: .fill) }
+                    else { avatarInitial }
+                }
+            } else {
+                avatarInitial
             }
         }
-        .padding(.horizontal, CinemaTheme.Spacing.lg)
-        .padding(.vertical, 12)
+        .frame(width: 20, height: 20)
+        .clipShape(Circle())
+    }
+
+    private var avatarInitial: some View {
+        CinemaTheme.Colors.background.overlay(
+            Text((user?.displayName ?? user?.username ?? "?").prefix(1).uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(CinemaTheme.Colors.textPrimary)
+        )
     }
 }
 
@@ -1151,25 +1229,6 @@ private struct StatCell: View {
             .frame(maxWidth: .infinity)
         }
         .disabled(!tappable)
-    }
-}
-
-private struct FingerprintRow<Content: View>: View {
-    let label: String
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Text(label)
-                .font(.system(size: 13))
-                .foregroundStyle(CinemaTheme.Colors.textSecondary)
-                .frame(width: 64, alignment: .leading)
-            content()
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(CinemaTheme.Colors.surface)
     }
 }
 

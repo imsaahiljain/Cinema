@@ -23,8 +23,17 @@ enum StoryShareContent {
 /// that one-tap "skip Instagram's own UI" shortcut isn't worth the fragility.
 @MainActor
 enum StoryShareService {
-    static func share(_ content: StoryShareContent, user: CinemaUser?) {
-        let card = StoryShareCard(content: content, user: user)
+    static func share(_ content: StoryShareContent, user: CinemaUser?) async {
+        // `ImageRenderer` snapshots the view tree synchronously — `PosterImage`'s AsyncImage
+        // hasn't fetched anything over the network yet at that instant, so without this the
+        // rendered share image comes out with empty/placeholder tiles instead of real posters
+        // (worse, SF Symbols inside a placeholder don't reliably rasterize under ImageRenderer
+        // either, so it isn't even a clean fallback — it shows a generic "unsupported glyph"
+        // icon). Fetching real UIImages first and handing the card concrete pixels sidesteps
+        // both problems at once.
+        let posterImages = await preloadPosters(for: content)
+
+        let card = StoryShareCard(content: content, posterImages: posterImages, user: user)
             .frame(width: 405, height: 720) // 9:16 at a size ImageRenderer handles cleanly
             .environment(\.colorScheme, .dark)
         let renderer = ImageRenderer(content: card)
@@ -38,6 +47,28 @@ enum StoryShareService {
             root.present(av, animated: true)
         }
     }
+
+    private static func preloadPosters(for content: StoryShareContent) async -> [Int: UIImage] {
+        guard case .posterGrid(let films, _) = content else { return [:] }
+        var result: [Int: UIImage] = [:]
+        await withTaskGroup(of: (Int, UIImage?).self) { group in
+            for film in films.prefix(9) {
+                group.addTask {
+                    guard let path = film.posterPath, let url = TMDBClient.shared.posterURL(path: path) else {
+                        return (film.id, nil)
+                    }
+                    guard let (data, _) = try? await URLSession.shared.data(from: url), let image = UIImage(data: data) else {
+                        return (film.id, nil)
+                    }
+                    return (film.id, image)
+                }
+            }
+            for await (id, image) in group {
+                result[id] = image
+            }
+        }
+        return result
+    }
 }
 
 // MARK: - StoryShareCard
@@ -45,8 +76,10 @@ enum StoryShareService {
 /// The actual pixels that get rendered and handed off — kept visually consistent with
 /// `ShareCard` (the existing Top-Films share card) but reformatted to a full 9:16 story
 /// frame instead of a square-ish grid card, since Stories crop/pad anything that isn't.
+/// Takes pre-fetched `posterImages` rather than fetching its own — see `StoryShareService`.
 struct StoryShareCard: View {
     let content: StoryShareContent
+    let posterImages: [Int: UIImage]
     let user: CinemaUser?
 
     var body: some View {
@@ -67,8 +100,9 @@ struct StoryShareCard: View {
                             spacing: 3
                         ) {
                             ForEach(Array(films.prefix(9).enumerated()), id: \.offset) { _, film in
-                                PosterImage(path: film.posterPath, cornerRadius: 6)
+                                posterTile(for: film)
                                     .aspectRatio(2/3, contentMode: .fit)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
                             }
                         }
                         .padding(.horizontal, 36)
@@ -89,6 +123,17 @@ struct StoryShareCard: View {
                 }
                 .padding(.bottom, 56)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func posterTile(for film: MediaItem) -> some View {
+        if let image = posterImages[film.id] {
+            Image(uiImage: image).resizable().aspectRatio(contentMode: .fill)
+        } else {
+            // Solid fill, no icon — an SF Symbol here would hit the same
+            // ImageRenderer rasterization problem this whole fix exists for.
+            CinemaTheme.Colors.surface
         }
     }
 }
