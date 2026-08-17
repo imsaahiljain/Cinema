@@ -34,6 +34,14 @@ private struct FollowRecord: Decodable {
     }
 }
 
+struct ActivityEntry: Identifiable {
+    let id: UUID
+    let media: MediaItem
+    let ratingOutOf10: Double?
+    let note: String?
+    let updatedAt: Date
+}
+
 // MARK: - ViewModel
 
 @Observable
@@ -44,6 +52,7 @@ final class ProfileViewModel {
     var leastLikedFilms: [MediaItem] = []
     var favoriteGenre: String?
     var favoriteGenreFilms: [MediaItem] = []
+    var recentActivity: [ActivityEntry] = []
     var followerCount: Int = 0
     var followingCount: Int = 0
     var tasteProfile: TasteProfile?
@@ -91,6 +100,8 @@ final class ProfileViewModel {
             }
             topFilms = loaded
 
+            await loadRecentActivity(userID: userID, items: items)
+
             // Least Liked / Favorite Genre need more than a handful ranked to mean anything
             // distinct from Top Films — 5 is a low, mostly-just-not-empty bar.
             if items.count >= 5 {
@@ -113,6 +124,49 @@ final class ProfileViewModel {
                 isTasteProfileLoading = false
             }
         } catch {}
+    }
+
+    /// Most-recently-ranked-or-updated first, not ELO order — this is meant to read as "what
+    /// have you been up to," not another view of the same top/bottom lists. Reuses your own
+    /// private note (`film_notes`) if you left one, same as MovieInfoView's note field.
+    private func loadRecentActivity(userID: UUID, items: [RankedItem]) async {
+        let recent = items.sorted { $0.updatedAt > $1.updatedAt }.prefix(10)
+        guard !recent.isEmpty else { recentActivity = []; return }
+
+        let notesByKey: [String: String] = await {
+            let tmdbIDs = Array(Set(recent.map(\.tmdbID)))
+            guard let notes: [FilmNote] = try? await SupabaseClient.shared
+                .from("film_notes")
+                .select()
+                .eq("user_id", value: userID)
+                .in("tmdb_id", values: tmdbIDs)
+                .execute()
+                .value else { return [:] }
+            return Dictionary(uniqueKeysWithValues: notes.map { ("\($0.tmdbID)-\($0.mediaType.rawValue)", $0.note) })
+        }()
+
+        // Same linear rank->rating formula as MovieInfoViewModel.FriendTake.ratingOutOf10
+        // (#1 of N = 10.0, #N of N = 0.0) — reused here rather than reinvented so a film's
+        // score reads the same on your profile as it does on its own detail screen.
+        let totalRanked = items.count
+        func ratingOutOf10(for rankPosition: Int?) -> Double? {
+            guard let pos = rankPosition, totalRanked > 1 else { return rankPosition == 1 ? 10.0 : nil }
+            return max(0, (1.0 - Double(pos - 1) / Double(totalRanked - 1)) * 10.0)
+        }
+
+        var entries: [ActivityEntry] = []
+        for item in recent {
+            guard let media = try? await TMDBClient.shared.details(tmdbID: item.tmdbID, mediaType: item.mediaType) else { continue }
+            let note = notesByKey["\(item.tmdbID)-\(item.mediaType.rawValue)"]
+            entries.append(ActivityEntry(
+                id: item.id,
+                media: media,
+                ratingOutOf10: ratingOutOf10(for: item.rankPosition),
+                note: (note?.isEmpty == false) ? note : nil,
+                updatedAt: item.updatedAt
+            ))
+        }
+        recentActivity = entries
     }
 
     /// Lighter-weight than the full taste profile below — just genres, ELO-weighted, no
@@ -216,6 +270,7 @@ struct ProfileView: View {
     @State private var showPeopleSearch = false
     @State private var showEditProfile = false
     @State private var carouselPage = 0
+    @State private var favoritesTab: FavoritesTab = .activity
     @AppStorage("cinema_dev_fingerprint") private var devFingerprintUnlocked = false
 
     private static let memberSinceFormatter: DateFormatter = {
@@ -236,7 +291,7 @@ struct ProfileView: View {
                         profileHeader
                         socialStats
                         filmCarouselSection
-                        filmFingerprintSection
+                        favoritesTabSection
                         Spacer().frame(height: 100)
                     }
                 }
@@ -533,26 +588,94 @@ struct ProfileView: View {
                 .background(.black.opacity(0.55))
                 .clipShape(Circle())
         }
-        .accessibilityLabel("Share to Instagram Stories")
+        .accessibilityLabel("Share")
     }
 
-    // MARK: - Film Favorites
+    // MARK: - Activity / Taste Profile
 
-    private var filmFingerprintSection: some View {
+    private enum FavoritesTab: CaseIterable { case activity, tasteProfile }
+
+    private func favoritesTabLabel(_ tab: FavoritesTab) -> String {
+        switch tab {
+        case .activity: return "Activity"
+        case .tasteProfile: return "Taste Profile"
+        }
+    }
+
+    private func favoritesTabIcon(_ tab: FavoritesTab) -> String {
+        switch tab {
+        case .activity: return "doc.text.image"
+        case .tasteProfile: return "chart.bar.fill"
+        }
+    }
+
+    private var favoritesTabSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Film Favorites")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                Spacer()
-                if !devFingerprintUnlocked && vm.rankedCount < 25 {
-                    Text("\(vm.rankedCount) of 25")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+            HStack(spacing: 0) {
+                ForEach(FavoritesTab.allCases, id: \.self) { tab in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) { favoritesTab = tab }
+                    } label: {
+                        VStack(spacing: 8) {
+                            HStack(spacing: 6) {
+                                Image(systemName: favoritesTabIcon(tab)).font(.system(size: 13))
+                                Text(favoritesTabLabel(tab)).font(.system(size: 14, weight: .semibold))
+                            }
+                            .foregroundStyle(favoritesTab == tab ? CinemaTheme.Colors.textPrimary : CinemaTheme.Colors.textSecondary)
+                            Rectangle()
+                                .fill(favoritesTab == tab ? CinemaTheme.Colors.gold : .clear)
+                                .frame(height: 2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
                 }
             }
             .padding(.horizontal, CinemaTheme.Spacing.lg)
-            .padding(.bottom, 16)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(CinemaTheme.Colors.border).frame(height: 1)
+            }
+            .padding(.bottom, 20)
+
+            if favoritesTab == .activity {
+                activityContent
+            } else {
+                tasteProfileContent
+            }
+        }
+        .padding(.bottom, 36)
+    }
+
+    private var activityContent: some View {
+        VStack(spacing: 0) {
+            if vm.recentActivity.isEmpty {
+                Text("Rank a film to see your activity here.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                    .padding(.horizontal, CinemaTheme.Spacing.lg)
+            } else {
+                ForEach(vm.recentActivity) { entry in
+                    ActivityRow(entry: entry)
+                    if entry.id != vm.recentActivity.last?.id {
+                        Rectangle()
+                            .fill(CinemaTheme.Colors.border)
+                            .frame(height: 1)
+                            .padding(.leading, CinemaTheme.Spacing.lg + 60)
+                    }
+                }
+            }
+        }
+    }
+
+    private var tasteProfileContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if !devFingerprintUnlocked && vm.rankedCount < 25 {
+                Text("\(vm.rankedCount) of 25 films ranked")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                    .padding(.horizontal, CinemaTheme.Spacing.lg)
+                    .padding(.bottom, 16)
+            }
 
             if devFingerprintUnlocked {
                 unlockedFingerprintView(TasteProfile.mock)
@@ -569,7 +692,6 @@ struct ProfileView: View {
                 unlockedFingerprintView(profile)
             }
         }
-        .padding(.bottom, 36)
     }
 
     private var lockedFingerprintView: some View {
@@ -960,6 +1082,51 @@ private struct SettingsRow: View {
             .padding(.vertical, 14)
         }
         .disabled(disabled)
+    }
+}
+
+// MARK: - Activity Row
+
+private struct ActivityRow: View {
+    let entry: ActivityEntry
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return f
+    }()
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            PosterImage(path: entry.media.posterPath, cornerRadius: CinemaTheme.Radius.sm)
+                .frame(width: 46, height: 69)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.media.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                    .lineLimit(2)
+                if let note = entry.note {
+                    Text(note)
+                        .font(.system(size: 13))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                        .lineLimit(2)
+                }
+                Text(Self.relativeFormatter.localizedString(for: entry.updatedAt, relativeTo: Date()))
+                    .font(.system(size: 11))
+                    .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.6))
+            }
+
+            Spacer(minLength: 8)
+
+            if let rating = entry.ratingOutOf10 {
+                Text(String(format: "%.1f", rating))
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(CinemaTheme.Colors.gold)
+            }
+        }
+        .padding(.horizontal, CinemaTheme.Spacing.lg)
+        .padding(.vertical, 12)
     }
 }
 
