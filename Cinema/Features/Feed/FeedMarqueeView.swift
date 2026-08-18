@@ -1,21 +1,30 @@
 import SwiftUI
+import Supabase
 
 // MARK: - FeedMarqueeView — "Marquee": warm ticket-stub card feed
 //
-// Isolated prototype — no network calls, no Supabase writes. Built directly
-// from the high-fidelity design handoff in design_handoff_marquee_feed/
-// (colors extracted pixel-exact from the reference mockup via a canvas
-// readback, not eyeballed; fonts are the real Google Fonts named in the
-// spec, bundled as static Regular/SemiBold/Bold instances — see
-// Cinema/Resources/Fonts/).
+// Wired to real data: `ranked_items` for the users the current user follows
+// (via `follows`), most-recently-updated first — same pattern already proven
+// in DiscoverView.loadSocial and ProfileViewModel.loadRecentActivity. There
+// is no `feed_events` table wired up yet (it exists in Docs/schema.sql but
+// nothing writes to it) — see FeedMarqueeViewModel.load for why this reuses
+// `ranked_items` instead.
+//
+// Two real gaps, solved rather than papered over:
+// - No public-caption field exists on a ranking event, and `film_notes` is a
+//   private per-user table (RLS-restricted to its owner) — showing it in a
+//   friend's feed would leak private data. Captions are auto-generated
+//   instead, following Docs/feed-design-spec.md §3's tone rules ("popped
+//   [Movie]" — present-tense, no "review"/"rating" language).
+// - No likes/comments schema exists yet either. Reaction counts are kept
+//   exactly as session-local UI state (matches the mock's prior behavior) —
+//   nothing is persisted, and counts reset to 0 on every load rather than
+//   faking a baseline.
 //
 // Rating pill is computed, not editorial: a film's displayed X/10 is
 // derived from the poster's rank position within the friend's own ranked
 // list (10.0 = their #1, scaling down to their lowest-ranked film) — see
 // `ratingOutOf10(rankPosition:totalRanked:)`.
-//
-// Hand-test on a physical device for scroll feel and the tap-to-expand
-// caption/tag animation.
 
 // MARK: - Rating formula
 
@@ -25,124 +34,209 @@ func ratingOutOf10(rankPosition: Int, totalRanked: Int) -> Double {
     return 10 * (1 - fraction)
 }
 
-// MARK: - Mock data
+// MARK: - Relative time label ("2h", "1d", "3w" — matches the design's compact style)
 
-private struct MockPop: Identifiable {
-    let id: Int
-    let friend: String
-    let avatarColor: Color
-    let posterDark: Color
-    let posterDarker: Color
-    let time: String
-    let movie: String
-    let year: Int
-    let rankPosition: Int
-    let totalRanked: Int
-    let caption: String
-    let tags: [String]
-    let likes: Int
-    let comments: Int
-
-    var rating: Double { ratingOutOf10(rankPosition: rankPosition, totalRanked: totalRanked) }
-    var ratingLabel: String { String(format: "%.1f", rating) }
+private func relativeTimeLabel(from date: Date) -> String {
+    let seconds = max(0, Date.now.timeIntervalSince(date))
+    switch seconds {
+    case ..<60: return "now"
+    case ..<3600: return "\(Int(seconds / 60))m"
+    case ..<86400: return "\(Int(seconds / 3600))h"
+    case ..<604800: return "\(Int(seconds / 86400))d"
+    default: return "\(Int(seconds / 604800))w"
+    }
 }
 
-// Colors sampled pixel-exact from oklch(0.62 0.11 {hue+40}) (avatar) and
-// oklch(0.4/0.36 0.09 {hue}) (poster) for each friend's hue in the handoff's
-// sample data. Rank/total chosen so the computed rating lands close to the
-// original mockup's editorial numbers, to confirm the formula is sound.
-private let mockPops: [MockPop] = [
-    MockPop(id: 1, friend: "Sofia Chen",
-            avatarColor: Color(red: 183/255, green: 116/255, blue: 61/255),
-            posterDark: Color(red: 112/255, green: 49/255, blue: 53/255),
-            posterDarker: Color(red: 100/255, green: 38/255, blue: 43/255),
-            time: "2h", movie: "Past Lives", year: 2023, rankPosition: 7, totalRanked: 50,
-            caption: "Cried on the subway home. Didn't expect that.",
-            tags: ["Celine Song", "A24"], likes: 12, comments: 3),
-    MockPop(id: 2, friend: "Marcus Webb",
-            avatarColor: Color(red: 79/255, green: 138/255, blue: 198/255),
-            posterDark: Color(red: 0/255, green: 84/255, blue: 98/255),
-            posterDarker: Color(red: 0/255, green: 73/255, blue: 87/255),
-            time: "4h", movie: "Dune: Part Two", year: 2024, rankPosition: 5, totalRanked: 50,
-            caption: "IMAX was mandatory for this one. Sound alone is a 10.",
-            tags: ["Denis Villeneuve", "Sci-Fi"], likes: 34, comments: 8),
-    MockPop(id: 3, friend: "Priya Patel",
-            avatarColor: Color(red: 159/255, green: 113/255, blue: 180/255),
-            posterDark: Color(red: 58/255, green: 66/255, blue: 120/255),
-            posterDarker: Color(red: 48/255, green: 55/255, blue: 108/255),
-            time: "6h", movie: "The Bear", year: 2024, rankPosition: 12, totalRanked: 50,
-            caption: "S3E1 — not as strong as season 1 but still good.",
-            tags: ["TV", "FX"], likes: 9, comments: 1),
-    MockPop(id: 4, friend: "Jordan Lee",
-            avatarColor: Color(red: 191/255, green: 105/255, blue: 106/255),
-            posterDark: Color(red: 103/255, green: 50/255, blue: 87/255),
-            posterDarker: Color(red: 91/255, green: 40/255, blue: 76/255),
-            time: "9h", movie: "Anora", year: 2024, rankPosition: 3, totalRanked: 50,
-            caption: "Palme d'Or well deserved. Rewatching this weekend.",
-            tags: ["Sean Baker", "Comedy"], likes: 41, comments: 12),
-    MockPop(id: 5, friend: "Ava Torres",
-            avatarColor: Color(red: 169/255, green: 126/255, blue: 44/255),
-            posterDark: Color(red: 111/255, green: 52/255, blue: 31/255),
-            posterDarker: Color(red: 99/255, green: 41/255, blue: 20/255),
-            time: "11h", movie: "Twisters", year: 2024, rankPosition: 19, totalRanked: 50,
-            caption: "Popcorn movie, exactly what I wanted on a Friday.",
-            tags: ["Action"], likes: 6, comments: 0),
-    MockPop(id: 6, friend: "Noah Kim",
-            avatarColor: Color(red: 0/255, green: 155/255, blue: 149/255),
-            posterDark: Color(red: 27/255, green: 85/255, blue: 44/255),
-            posterDarker: Color(red: 13/255, green: 74/255, blue: 34/255),
-            time: "1d", movie: "The Zone of Interest", year: 2023, rankPosition: 6, totalRanked: 50,
-            caption: "Haunting. Still thinking about the sound design.",
-            tags: ["Jonathan Glazer", "Drama"], likes: 22, comments: 5),
-    MockPop(id: 7, friend: "Liam Ortiz",
-            avatarColor: Color(red: 182/255, green: 117/255, blue: 59/255),
-            posterDark: Color(red: 112/255, green: 49/255, blue: 51/255),
-            posterDarker: Color(red: 100/255, green: 38/255, blue: 41/255),
-            time: "1d", movie: "Challengers", year: 2024, rankPosition: 9, totalRanked: 50,
-            caption: "That soundtrack lives in my head rent free.",
-            tags: ["Luca Guadagnino"], likes: 28, comments: 6),
+// MARK: - Avatar color (deterministic from user id — no per-friend art direction to key off anymore)
+
+private let avatarPalette: [Color] = [
+    Color(red: 183 / 255, green: 116 / 255, blue: 61 / 255),
+    Color(red: 79 / 255, green: 138 / 255, blue: 198 / 255),
+    Color(red: 159 / 255, green: 113 / 255, blue: 180 / 255),
+    Color(red: 191 / 255, green: 105 / 255, blue: 106 / 255),
+    Color(red: 169 / 255, green: 126 / 255, blue: 44 / 255),
+    Color(red: 0 / 255, green: 155 / 255, blue: 149 / 255),
 ]
+
+private func paletteColor(for userID: UUID) -> Color {
+    avatarPalette[abs(userID.uuidString.hashValue) % avatarPalette.count]
+}
+
+// MARK: - Pop (a real friend's ranked-item, turned into a feed card)
+
+struct FeedPop: Identifiable {
+    let id: UUID
+    let friendUserID: UUID
+    let friendName: String
+    let avatarURL: String?
+    let media: MediaItem
+    let updatedAt: Date
+    let rankPosition: Int
+    let totalRanked: Int
+
+    var avatarColor: Color { paletteColor(for: friendUserID) }
+    var timeLabel: String { relativeTimeLabel(from: updatedAt) }
+    var rating: Double { ratingOutOf10(rankPosition: rankPosition, totalRanked: totalRanked) }
+    var ratingLabel: String { String(format: "%.1f", rating) }
+    // Docs/feed-design-spec.md §3: "popped [Movie]" — present-tense, no forced
+    // hype, never "review"/"rating" in pop copy.
+    var caption: String { "popped \(media.title)" }
+    // Real signal (genres from the TMDB details already fetched for the
+    // poster), not fabricated director/studio flavor text — no extra
+    // credits call needed.
+    var tags: [String] { Array(media.genreNames.prefix(2)) }
+}
+
+// MARK: - ViewModel
+
+@Observable
+@MainActor
+final class FeedMarqueeViewModel {
+    var pops: [FeedPop] = []
+    var isLoading = false
+    var hasLoaded = false
+
+    func load(currentUserID: UUID?) async {
+        guard let currentUserID else { hasLoaded = true; return }
+        isLoading = true
+        defer { isLoading = false; hasLoaded = true }
+
+        struct FollowEdge: Decodable {
+            let followingID: UUID
+            enum CodingKeys: String, CodingKey { case followingID = "following_id" }
+        }
+        guard let edges: [FollowEdge] = try? await SupabaseClient.shared
+            .from("follows").select("following_id")
+            .eq("follower_id", value: currentUserID)
+            .execute().value, !edges.isEmpty else {
+            pops = []
+            return
+        }
+        let followingIDs = edges.map(\.followingID)
+
+        guard let recent: [RankedItem] = try? await SupabaseClient.shared
+            .from("ranked_items").select()
+            .in("user_id", values: followingIDs.map(\.uuidString))
+            .order("updated_at", ascending: false).limit(30)
+            .execute().value, !recent.isEmpty else {
+            pops = []
+            return
+        }
+        let items = Array(recent.prefix(20))
+
+        let userIDs = Array(Set(items.map(\.userID)))
+        guard let profiles: [CinemaUser] = try? await SupabaseClient.shared
+            .from("users").select()
+            .in("id", values: userIDs.map(\.uuidString))
+            .execute().value else {
+            pops = []
+            return
+        }
+        let profileMap = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
+
+        // `ranked_items.rank_position` looks like the obvious source for this
+        // but is stale/unreliable in practice: it's only ever written once,
+        // during onboarding (OnboardingView.completeOnboarding) — every later
+        // "This or That" duel (RankingView.choose) upserts elo_score alone,
+        // which wipes rank_position back to null on conflict (confirmed
+        // against the live QA account: 19/19 ranked_items, rank_position
+        // null on all of them). The screen that actually shows a working
+        // rank — ListsView (My Lists) — never reads that column either; it
+        // sorts by elo_score and uses the sorted array's index. Mirroring
+        // that same on-the-fly approach here instead of the DB column.
+        struct RankRow: Decodable { let id: UUID; let eloScore: Double
+            enum CodingKeys: String, CodingKey { case id; case eloScore = "elo_score" }
+        }
+        var rankByItemID: [UUID: Int] = [:]
+        var totalByUser: [UUID: Int] = [:]
+        for uid in userIDs {
+            let sorted: [RankRow] = (try? await SupabaseClient.shared
+                .from("ranked_items").select("id,elo_score").eq("user_id", value: uid)
+                .order("elo_score", ascending: false)
+                .execute().value) ?? []
+            totalByUser[uid] = sorted.count
+            for (index, row) in sorted.enumerated() {
+                rankByItemID[row.id] = index + 1
+            }
+        }
+        let rankByItem = rankByItemID
+        let totals = totalByUser
+
+        // Fetched concurrently (TMDB detail lookups are the slow part), then
+        // reassembled in original most-recent-first order — a TaskGroup
+        // doesn't preserve completion order on its own.
+        let fetched: [(Int, FeedPop)] = await withTaskGroup(of: (Int, FeedPop?).self) { group in
+            for (index, item) in items.enumerated() {
+                group.addTask {
+                    guard let user = profileMap[item.userID],
+                          let rankPosition = rankByItem[item.id],
+                          let media = try? await TMDBClient.shared.details(tmdbID: item.tmdbID, mediaType: item.mediaType)
+                    else { return (index, nil) }
+                    let pop = FeedPop(
+                        id: item.id,
+                        friendUserID: item.userID,
+                        friendName: user.displayName ?? user.username,
+                        avatarURL: user.avatarURL,
+                        media: media,
+                        updatedAt: item.updatedAt,
+                        rankPosition: rankPosition,
+                        totalRanked: totals[item.userID] ?? 1
+                    )
+                    return (index, pop)
+                }
+            }
+            var results: [(Int, FeedPop)] = []
+            for await (index, pop) in group {
+                if let pop { results.append((index, pop)) }
+            }
+            return results
+        }
+        pops = fetched.sorted { $0.0 < $1.0 }.map(\.1)
+    }
+}
 
 // MARK: - FeedMarqueeView
 
 struct FeedMarqueeView: View {
-    @State private var expandedIDs: Set<Int> = []
-    @State private var likedIDs: Set<Int> = []
-    @State private var resolvedMedia: [Int: MediaItem] = [:]
+    @Environment(AppState.self) private var appState
+    @State private var vm = FeedMarqueeViewModel()
+    @State private var expandedIDs: Set<UUID> = []
+    @State private var likedIDs: Set<UUID> = []
     @State private var selectedFilm: MediaItem?
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
                 Section {
-                    ForEach(mockPops) { pop in
-                        PopCard(
-                            pop: pop,
-                            media: resolvedMedia[pop.id],
-                            isExpanded: expandedIDs.contains(pop.id),
-                            isLiked: likedIDs.contains(pop.id),
-                            onExpandTap: {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    if expandedIDs.contains(pop.id) {
-                                        expandedIDs.remove(pop.id)
-                                    } else {
-                                        expandedIDs.insert(pop.id)
+                    if vm.pops.isEmpty && vm.hasLoaded {
+                        emptyState
+                    } else {
+                        ForEach(vm.pops) { pop in
+                            PopCard(
+                                pop: pop,
+                                isExpanded: expandedIDs.contains(pop.id),
+                                isLiked: likedIDs.contains(pop.id),
+                                onExpandTap: {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        if expandedIDs.contains(pop.id) {
+                                            expandedIDs.remove(pop.id)
+                                        } else {
+                                            expandedIDs.insert(pop.id)
+                                        }
                                     }
-                                }
-                            },
-                            onLikeTap: {
-                                withAnimation(.spring(duration: 0.3, bounce: 0.5)) {
-                                    if likedIDs.contains(pop.id) {
-                                        likedIDs.remove(pop.id)
-                                    } else {
-                                        likedIDs.insert(pop.id)
+                                },
+                                onLikeTap: {
+                                    withAnimation(.spring(duration: 0.3, bounce: 0.5)) {
+                                        if likedIDs.contains(pop.id) {
+                                            likedIDs.remove(pop.id)
+                                        } else {
+                                            likedIDs.insert(pop.id)
+                                        }
                                     }
-                                }
-                            },
-                            onPosterTap: {
-                                if let media = resolvedMedia[pop.id] { selectedFilm = media }
-                            }
-                        )
+                                },
+                                onPosterTap: { selectedFilm = pop.media }
+                            )
+                        }
                     }
                 } header: {
                     header
@@ -156,17 +250,8 @@ struct FeedMarqueeView: View {
         .sheet(item: $selectedFilm) { film in
             MovieInfoView(film: film)
         }
-        .task {
-            // Real TMDB posters for the mock pops — sequential on purpose,
-            // this is prototype-only lookup-by-title, not how production
-            // wiring will fetch (that'll carry a real tmdb_id already).
-            for pop in mockPops where resolvedMedia[pop.id] == nil {
-                if let results = try? await TMDBClient.shared.search(query: pop.movie),
-                   let first = results.first(where: { $0.posterPath != nil }) {
-                    resolvedMedia[pop.id] = first
-                }
-            }
-        }
+        .task { await vm.load(currentUserID: appState.currentUser?.id) }
+        .refreshable { await vm.load(currentUserID: appState.currentUser?.id) }
     }
 
     private var header: some View {
@@ -183,6 +268,21 @@ struct FeedMarqueeView: View {
         .padding(.bottom, 12)
         .background(WarmTheme.background)
     }
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Text("No pops yet")
+                .font(WarmTheme.Font.wordmarkBold(18))
+                .foregroundStyle(WarmTheme.titleText)
+            Text("Follow friends to see what they're ranking here.")
+                .font(WarmTheme.Font.body(13.5))
+                .foregroundStyle(WarmTheme.secondaryText)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 80)
+        .padding(.horizontal, 32)
+    }
 }
 
 // MARK: - Pop Card
@@ -195,8 +295,7 @@ private struct CardHeightKey: PreferenceKey {
 }
 
 private struct PopCard: View {
-    let pop: MockPop
-    let media: MediaItem?
+    let pop: FeedPop
     let isExpanded: Bool
     let isLiked: Bool
     let onExpandTap: () -> Void
@@ -228,17 +327,17 @@ private struct PopCard: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
-                    InitialsAvatar(name: pop.friend, color: pop.avatarColor, size: 22)
-                    Text(pop.friend)
+                    FeedAvatar(name: pop.friendName, urlString: pop.avatarURL, color: pop.avatarColor, size: 22)
+                    Text(pop.friendName)
                         .font(WarmTheme.Font.bodyBold(12.5))
                         .foregroundStyle(WarmTheme.nameText)
-                    Text("· \(pop.time)")
+                    Text("· \(pop.timeLabel)")
                         .font(WarmTheme.Font.body(11.5))
                         .foregroundStyle(WarmTheme.tertiaryText)
                 }
 
                 HStack(alignment: .firstTextBaseline) {
-                    Text(pop.movie)
+                    Text(pop.media.title)
                         .font(WarmTheme.Font.wordmark(19))
                         .foregroundStyle(WarmTheme.titleText)
                         .lineLimit(2)
@@ -257,7 +356,7 @@ private struct PopCard: View {
                     .lineLimit(isExpanded ? nil : 2)
                     .fixedSize(horizontal: false, vertical: true)
 
-                if isExpanded {
+                if isExpanded && !pop.tags.isEmpty {
                     HStack(spacing: 6) {
                         ForEach(pop.tags, id: \.self) { tag in
                             Text(tag)
@@ -272,14 +371,18 @@ private struct PopCard: View {
                 }
 
                 HStack(spacing: 16) {
+                    // Reaction counts are session-local only — no likes/comments
+                    // schema exists yet, so nothing here persists across a
+                    // relaunch or is visible to anyone else. Starts at 0 rather
+                    // than faking a baseline count.
                     ReactionButton(
                         outlineSymbol: "heart", filledSymbol: "heart.fill",
-                        count: pop.likes + (isLiked ? 1 : 0), isActive: isLiked,
+                        count: isLiked ? 1 : 0, isActive: isLiked,
                         activeColor: WarmTheme.accent, onTap: onLikeTap
                     )
                     ReactionButton(
                         outlineSymbol: "bubble.right", filledSymbol: "bubble.right.fill",
-                        count: pop.comments, isActive: false,
+                        count: 0, isActive: false,
                         activeColor: WarmTheme.accent, onTap: {}
                     )
                 }
@@ -303,23 +406,23 @@ private struct PopCard: View {
         }
     }
 
-    // Real poster when TMDB has resolved one; falls back to the striped
-    // placeholder (also the loading state) rather than PosterImage's
+    // Real poster from the film's actual tmdb_id — falls back to the
+    // striped placeholder (also the loading state) rather than PosterImage's
     // built-in dark-themed placeholder, which would clash with Marquee's
     // warm light palette.
     @ViewBuilder
     private var poster: some View {
-        if let path = media?.posterPath, let url = TMDBClient.shared.posterURL(path: path) {
+        if let path = pop.media.posterPath, let url = TMDBClient.shared.posterURL(path: path) {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case .success(let image):
                     image.resizable().aspectRatio(contentMode: .fill)
                 default:
-                    PosterPlaceholder(dark: pop.posterDark, darker: pop.posterDarker)
+                    PosterPlaceholder(dark: WarmTheme.tertiaryText, darker: WarmTheme.nameText)
                 }
             }
         } else {
-            PosterPlaceholder(dark: pop.posterDark, darker: pop.posterDarker)
+            PosterPlaceholder(dark: WarmTheme.tertiaryText, darker: WarmTheme.nameText)
         }
     }
 }
@@ -352,8 +455,9 @@ private struct ReactionButton: View {
 
 // MARK: - Avatar
 
-private struct InitialsAvatar: View {
+private struct FeedAvatar: View {
     let name: String
+    let urlString: String?
     let color: Color
     let size: CGFloat
 
@@ -362,9 +466,26 @@ private struct InitialsAvatar: View {
     }
 
     var body: some View {
+        Group {
+            if let urlString, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    if case .success(let image) = phase {
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        initialsFill
+                    }
+                }
+            } else {
+                initialsFill
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+
+    private var initialsFill: some View {
         Circle()
             .fill(color)
-            .frame(width: size, height: size)
             .overlay(
                 Text(initials)
                     .font(.system(size: size * 0.36, weight: .bold))
@@ -375,4 +496,5 @@ private struct InitialsAvatar: View {
 
 #Preview {
     FeedMarqueeView()
+        .environment(AppState())
 }
