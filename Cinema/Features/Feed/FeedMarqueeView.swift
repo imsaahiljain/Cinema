@@ -271,6 +271,67 @@ final class FeedMarqueeViewModel {
         pops = fetched.sorted { $0.0 < $1.0 }.map(\.1)
     }
 
+    // Loads exactly one pop by its feed_events.id, for a permalink-style detail
+    // view (e.g. tapping a friend's take on MovieInfoView) rather than the full
+    // following-feed batch load above. Mirrors that same load()'s per-item
+    // logic (same live-rank-position computation, same "skip if the film's
+    // since been unranked" guard) but scoped to a single row.
+    func loadSinglePop(feedEventID: UUID, currentUserID: UUID?) async -> FeedPop? {
+        self.currentUserID = currentUserID
+
+        struct FeedEventRow: Decodable {
+            let id: UUID; let userID: UUID; let tmdbID: Int; let mediaType: MediaType
+            let caption: String?; let createdAt: Date
+            enum CodingKeys: String, CodingKey {
+                case id; case userID = "user_id"; case tmdbID = "tmdb_id"
+                case mediaType = "media_type"; case caption; case createdAt = "created_at"
+            }
+        }
+        guard let event: FeedEventRow = try? await SupabaseClient.shared
+            .from("feed_events").select()
+            .eq("id", value: feedEventID)
+            .single().execute().value else { return nil }
+
+        guard let user: CinemaUser = try? await SupabaseClient.shared
+            .from("users").select().eq("id", value: event.userID)
+            .single().execute().value,
+            let media = try? await TMDBClient.shared.details(tmdbID: event.tmdbID, mediaType: event.mediaType)
+        else { return nil }
+
+        struct RankRow: Decodable { let tmdbID: Int; let mediaType: MediaType; let eloScore: Double
+            enum CodingKeys: String, CodingKey { case tmdbID = "tmdb_id"; case mediaType = "media_type"; case eloScore = "elo_score" }
+        }
+        let sorted: [RankRow] = (try? await SupabaseClient.shared
+            .from("ranked_items").select("tmdb_id,media_type,elo_score").eq("user_id", value: event.userID)
+            .order("elo_score", ascending: false)
+            .execute().value) ?? []
+        // Same "film's since been unranked" guard as the batch load — no
+        // rank means nothing honest to show.
+        guard let idx = sorted.firstIndex(where: { $0.tmdbID == event.tmdbID && $0.mediaType == event.mediaType }) else { return nil }
+
+        struct LikeRow: Decodable { let userID: UUID
+            enum CodingKeys: String, CodingKey { case userID = "user_id" }
+        }
+        let likeRows: [LikeRow] = (try? await SupabaseClient.shared
+            .from("pop_likes").select("user_id").eq("feed_event_id", value: feedEventID)
+            .execute().value) ?? []
+
+        struct JustID: Decodable { let id: UUID }
+        let commentRows: [JustID] = (try? await SupabaseClient.shared
+            .from("pop_comments").select("id").eq("feed_event_id", value: feedEventID)
+            .execute().value) ?? []
+
+        let pop = FeedPop(
+            id: event.id, friendUserID: event.userID, friendName: user.displayName ?? user.username,
+            avatarURL: user.avatarURL, media: media, createdAt: event.createdAt,
+            rankPosition: idx + 1, totalRanked: sorted.count, userCaption: event.caption,
+            likeCount: likeRows.count, isLikedByMe: likeRows.contains { $0.userID == currentUserID },
+            commentCount: commentRows.count
+        )
+        pops = [pop]
+        return pop
+    }
+
     func toggleLike(popID: UUID) async {
         guard let currentUserID, let idx = pops.firstIndex(where: { $0.id == popID }) else { return }
         let wasLiked = pops[idx].isLikedByMe
@@ -366,7 +427,7 @@ struct FeedMarqueeView: View {
             // PopCard) — so every card's poster is the same real 2:3 poster
             // shape regardless of how long that pop's title/caption is.
             let cardContentWidth = screenGeo.size.width - 32 // 16pt horizontal padding each side
-            let posterWidth = cardContentWidth * 0.32
+            let posterWidth = cardContentWidth * 0.30
 
             ScrollView {
                 // Not pinned: a sticky header here has no divider/shadow of
@@ -445,6 +506,134 @@ struct FeedMarqueeView: View {
         .frame(maxWidth: .infinity)
         .padding(.top, 80)
         .padding(.horizontal, 32)
+    }
+}
+
+// MARK: - Pop Detail (permalink to one friend's specific post — not their whole profile)
+//
+// Reached from MovieInfoView's Friends' Takes row: tapping a friend's take opens the actual
+// "pop" they posted for that film (poster, caption, like/comment) instead of dumping the user
+// on that friend's entire profile grid. Falls back to the profile sheet in MovieInfoView itself
+// when the take predates feed_events or was ranked privately (no post exists to open).
+struct PopDetailView: View {
+    let feedEventID: UUID
+    @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
+    @State private var vm = FeedMarqueeViewModel()
+    @State private var comments: [PopComment] = []
+    @State private var isLoading = true
+    @State private var loadFailed = false
+    @State private var draft = ""
+    @State private var isPosting = false
+    @State private var selectedFilm: MediaItem?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let pop = vm.pops.first(where: { $0.id == feedEventID }) {
+                    GeometryReader { geo in
+                        let posterWidth = (geo.size.width - 32) * 0.30
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 20) {
+                                PopCard(
+                                    pop: pop,
+                                    posterWidth: posterWidth,
+                                    isExpanded: true,
+                                    onExpandTap: {},
+                                    onLikeTap: { Task { await vm.toggleLike(popID: pop.id) } },
+                                    onCommentTap: {},
+                                    onPosterTap: { selectedFilm = pop.media }
+                                )
+                                commentsSection
+                            }
+                            .padding(16)
+                        }
+                    }
+                } else {
+                    VStack(spacing: 6) {
+                        Text("This post is gone")
+                            .font(WarmTheme.Font.wordmarkBold(18))
+                            .foregroundStyle(WarmTheme.titleText)
+                        Text("It may have been deleted or unranked.")
+                            .font(WarmTheme.Font.body(13.5))
+                            .foregroundStyle(WarmTheme.secondaryText)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .background(WarmTheme.background)
+            .navigationTitle("Pop")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
+        .task {
+            let pop = await vm.loadSinglePop(feedEventID: feedEventID, currentUserID: appState.currentUser?.id)
+            loadFailed = pop == nil
+            isLoading = false
+            if let pop { comments = await vm.loadComments(popID: pop.id) }
+        }
+        .sheet(item: $selectedFilm) { film in
+            MovieInfoView(film: film)
+        }
+    }
+
+    private var commentsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Comments")
+                .font(WarmTheme.Font.bodyBold(15))
+                .foregroundStyle(WarmTheme.titleText)
+
+            if comments.isEmpty {
+                Text("No comments yet.")
+                    .font(WarmTheme.Font.body(13.5))
+                    .foregroundStyle(WarmTheme.secondaryText)
+            } else {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(comments) { comment in
+                        CommentRow(comment: comment)
+                    }
+                }
+            }
+
+            HStack(spacing: 10) {
+                TextField("Add a comment...", text: $draft)
+                    .font(WarmTheme.Font.body(14))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(WarmTheme.chipBackground, in: Capsule())
+                Button {
+                    Task { await postComment() }
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(
+                            draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                ? WarmTheme.tertiaryText : WarmTheme.accent
+                        )
+                }
+                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isPosting || appState.currentUser == nil)
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private func postComment() async {
+        guard let currentUser = appState.currentUser, let popID = vm.pops.first?.id else { return }
+        let text = draft
+        draft = ""
+        isPosting = true
+        defer { isPosting = false }
+        if let comment = await vm.postComment(popID: popID, body: text, author: currentUser) {
+            withAnimation { comments.append(comment) }
+        } else {
+            draft = text
+        }
     }
 }
 
@@ -529,6 +718,13 @@ private struct PopCard: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
+                // Pushes the reaction row to the bottom of the text column
+                // instead of sitting right under however tall the caption
+                // happens to be — so heart/comment land in the same spot on
+                // every card. Only actually pushes anything once the column
+                // is given a minimum height to grow into, below.
+                Spacer(minLength: 8)
+
                 HStack(spacing: 16) {
                     ReactionButton(
                         outlineSymbol: "heart", filledSymbol: "heart.fill",
@@ -542,6 +738,12 @@ private struct PopCard: View {
                     )
                 }
             }
+            // Matches the poster's own height (minus this column's own
+            // vertical padding) as a *minimum* — short text still fills the
+            // full poster height so the Spacer above can park the reaction
+            // row at the bottom; an expanded card with tags can still grow
+            // taller than the poster if it genuinely needs to.
+            .frame(minHeight: max(0, posterHeight - 28), alignment: .top)
             .padding(.trailing, 16)
             .padding(.vertical, 14)
             .contentShape(Rectangle())

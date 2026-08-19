@@ -3,6 +3,11 @@ import Supabase
 
 // MARK: - Supporting Types
 
+// UUID isn't Identifiable on its own — this just makes a feed_events.id usable with `.sheet(item:)`.
+private struct FeedEventRef: Identifiable {
+    let id: UUID
+}
+
 struct FriendTake: Identifiable {
     let id: UUID
     let user: CinemaUser?
@@ -11,6 +16,10 @@ struct FriendTake: Identifiable {
     let rankPosition: Int?
     let totalRanked: Int
     var isSelf: Bool = false
+    // The specific feed_events row this take posted, if any — nil when the ranking predates
+    // feed_events, or was made with "Keep this private" on (see RankingView.finish). Friends'
+    // Takes opens this exact post when present; falls back to the friend's profile otherwise.
+    var feedEventID: UUID? = nil
 
     // Linear scale: #1 of N = 10.0, #N of N = 0.0
     var ratingOutOf10: Double? {
@@ -37,6 +46,13 @@ final class MovieInfoViewModel {
     var friendTakes: [FriendTake] = []
     var isLoading = false
 
+    // Search/Discover/Feed all hand this screen a lightweight `MediaItem` from a TMDB list
+    // endpoint (search/multi, discover, trending) — none of those responses include `runtime`,
+    // only the full `/movie/{id}` or `/tv/{id}` details endpoint does. Fetching it here backfills
+    // that gap rather than silently showing no runtime for almost every film that reaches this
+    // screen, regardless of where it was opened from.
+    var detailedFilm: MediaItem?
+
     var noteDraft: String = ""
     private var savedNote: String = ""
     var isSavingNote = false
@@ -46,6 +62,7 @@ final class MovieInfoViewModel {
         isLoading = true
         defer { isLoading = false }
 
+        detailedFilm = try? await TMDBClient.shared.details(tmdbID: film.id, mediaType: film.mediaType)
         credits = try? await TMDBClient.shared.credits(tmdbID: film.id, mediaType: film.mediaType)
         director = credits?.crew.first(where: { $0.job == "Director" })
         // TMDB credits the source material under two different job titles depending on whether
@@ -121,6 +138,25 @@ final class MovieInfoViewModel {
             .execute().value else { return takes }
 
         let profileMap = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
+
+        // The feed_events row backing each friend's take, so tapping it can open their actual
+        // post instead of just their profile. Grouped by user, keeping only the most recent
+        // event per user in case they've re-ranked (and re-posted) this same title over time.
+        struct FeedEventIDRow: Decodable {
+            let id: UUID; let userID: UUID
+            enum CodingKeys: String, CodingKey { case id; case userID = "user_id" }
+        }
+        let feedEventRows: [FeedEventIDRow] = (try? await SupabaseClient.shared
+            .from("feed_events").select("id,user_id")
+            .eq("tmdb_id", value: tmdbID).eq("media_type", value: mediaType.rawValue)
+            .in("user_id", values: items.map { $0.userID.uuidString })
+            .order("created_at", ascending: false)
+            .execute().value) ?? []
+        var feedEventByUser: [UUID: UUID] = [:]
+        for row in feedEventRows where feedEventByUser[row.userID] == nil {
+            feedEventByUser[row.userID] = row.id
+        }
+
         for item in items {
             guard let user = profileMap[item.userID] else { continue }
             let allItems: [JustID] = (try? await SupabaseClient.shared
@@ -131,7 +167,8 @@ final class MovieInfoViewModel {
                 displayName: user.displayName ?? user.username,
                 username: user.username,
                 rankPosition: item.rankPosition,
-                totalRanked: allItems.count
+                totalRanked: allItems.count,
+                feedEventID: feedEventByUser[item.userID]
             ))
         }
         return takes
@@ -169,6 +206,7 @@ struct MovieInfoView: View {
     let film: MediaItem
     @State private var vm = MovieInfoViewModel()
     @State private var selectedFriend: CinemaUser?
+    @State private var selectedFeedEventID: FeedEventRef?
     @State private var showAddToList = false
     @State private var showRanking = false
     @Environment(AppState.self) private var appState
@@ -217,7 +255,23 @@ struct MovieInfoView: View {
             RankingView(film: film, onFinished: { dismiss() })
         }
         .sheet(item: $selectedFriend) { friend in
-            NavigationStack { UserProfileView(user: friend) }
+            // UserProfileView is a NavigationStack *root* here (no back button of its own — that
+            // only exists when it's pushed onto an existing stack, as elsewhere in the app), so
+            // without an explicit close button this sheet had no way out — swiping down landed on
+            // the friend's ScrollView content instead of dismissing. Same fix already established
+            // in PeopleSearchView's identical sheet presentation of this same view.
+            NavigationStack {
+                UserProfileView(user: friend)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done") { selectedFriend = nil }
+                                .foregroundStyle(CinemaTheme.Colors.gold)
+                        }
+                    }
+            }
+        }
+        .sheet(item: $selectedFeedEventID) { ref in
+            PopDetailView(feedEventID: ref.id)
         }
     }
 
@@ -296,7 +350,7 @@ struct MovieInfoView: View {
                         metaText("·")
                     }
                     if let year = film.releaseYear { metaText(year) }
-                    if let rt = film.formattedRuntime { metaText("·"); metaText(rt) }
+                    if let rt = vm.detailedFilm?.formattedRuntime ?? film.formattedRuntime { metaText("·"); metaText(rt) }
                     if let score = film.voteAverage, score > 0 {
                         metaText("·")
                         HStack(spacing: 3) {
@@ -641,7 +695,14 @@ struct MovieInfoView: View {
             VStack(spacing: 8) {
                 ForEach(vm.friendTakes) { take in
                     Button {
-                        if !take.isSelf, let user = take.user { selectedFriend = user }
+                        guard !take.isSelf else { return }
+                        // Prefer the actual post they made — falls back to their profile only
+                        // when no post exists (pre-feed_events ranking, or it was private).
+                        if let feedEventID = take.feedEventID {
+                            selectedFeedEventID = FeedEventRef(id: feedEventID)
+                        } else if let user = take.user {
+                            selectedFriend = user
+                        }
                     } label: {
                         HStack(spacing: 12) {
                             ZStack {

@@ -305,7 +305,10 @@ final class RankingViewModel {
     // `finish()` already created. A no-op if they left it blank, or if the
     // ranking was private (no feedEventID exists to attach to).
     func postCaption() async {
-        let trimmed = captionDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Re-enforced here, not just in the TextField's onChange — belt and
+        // suspenders against anything that reaches this without going
+        // through that UI (paste races, a future second entry point, etc).
+        let trimmed = String(captionDraft.trimmingCharacters(in: .whitespacesAndNewlines).prefix(100))
         guard let feedEventID, !trimmed.isEmpty else { return }
         do {
             try await SupabaseClient.shared.from("feed_events")
@@ -869,6 +872,11 @@ private struct RankedResultView: View {
     @Binding var caption: String
     let onDone: () -> Void
 
+    // A sentence or two — long enough for a real reaction, short enough that
+    // it can't turn into a review. Anyone with more to say has the comment
+    // thread on the pop itself for that.
+    private let captionCharLimit = 100
+
     @FocusState private var captionFocused: Bool
 
     var body: some View {
@@ -897,10 +905,18 @@ private struct RankedResultView: View {
             // instead of an auto-generated "popped [Movie]" line. Skippable:
             // leaving it blank just falls back to that auto caption.
             VStack(alignment: .leading, spacing: 6) {
-                Text("Add a caption")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .textCase(.uppercase)
+                HStack {
+                    Text("Add a caption")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .textCase(.uppercase)
+                    Spacer()
+                    // A sentence or two, not a review — anything longer belongs
+                    // in a comment instead, where there's actually room for it.
+                    Text("\(caption.count)/\(captionCharLimit)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(caption.isEmpty ? 0.3 : 0.5))
+                }
                 TextField("What'd you think?", text: $caption, axis: .vertical)
                     .focused($captionFocused)
                     .font(.system(size: 15))
@@ -910,6 +926,11 @@ private struct RankedResultView: View {
                     .background(Color.white.opacity(0.06))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
+                    .onChange(of: caption) { _, newValue in
+                        if newValue.count > captionCharLimit {
+                            caption = String(newValue.prefix(captionCharLimit))
+                        }
+                    }
             }
             .padding(.horizontal, 24)
             .padding(.top, 4)
