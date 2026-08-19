@@ -112,6 +112,10 @@ create table public.feed_events (
   media_type    text not null check (media_type in ('movie', 'tv')),
   elo_score     numeric,
   rank_position integer,
+  -- The real caption a user writes right after finishing a "This or That"
+  -- ranking (RankingView's result screen). Null/empty means they skipped
+  -- it — Feed falls back to an auto "popped [Movie]" caption in that case.
+  caption       text,
   created_at    timestamptz not null default now()
 );
 
@@ -122,6 +126,58 @@ create policy "Anyone can read feed events"
 
 create policy "Users can insert own feed events"
   on public.feed_events for insert with check (auth.uid() = user_id);
+
+-- Needed for RankingView.postCaption to attach a caption after the row is
+-- created (the caption is typed on the *next* screen, after the row already
+-- exists) — without this, RLS silently rejects the update and the caption
+-- is lost with no visible error (caught during verification: a real ranking
+-- through the UI produced a feed_events row with caption stuck at null).
+create policy "Users can update own feed events"
+  on public.feed_events for update using (auth.uid() = user_id);
+
+-- ─────────────────────────────────────────────
+-- POP LIKES
+-- Real likes on a feed_events row (a "pop"). One row per (event, user) —
+-- the unique constraint makes "like" a toggle, not a counter.
+-- ─────────────────────────────────────────────
+create table public.pop_likes (
+  id             uuid default uuid_generate_v4() primary key,
+  feed_event_id  uuid references public.feed_events(id) on delete cascade not null,
+  user_id        uuid references public.users(id) on delete cascade not null,
+  created_at     timestamptz not null default now(),
+  unique (feed_event_id, user_id)
+);
+
+alter table public.pop_likes enable row level security;
+
+create policy "Anyone can read likes"
+  on public.pop_likes for select using (true);
+
+create policy "Users can manage own likes"
+  on public.pop_likes for all using (auth.uid() = user_id);
+
+-- ─────────────────────────────────────────────
+-- POP COMMENTS
+-- Real comments on a feed_events row (a "pop").
+-- ─────────────────────────────────────────────
+create table public.pop_comments (
+  id             uuid default uuid_generate_v4() primary key,
+  feed_event_id  uuid references public.feed_events(id) on delete cascade not null,
+  user_id        uuid references public.users(id) on delete cascade not null,
+  body           text not null,
+  created_at     timestamptz not null default now()
+);
+
+alter table public.pop_comments enable row level security;
+
+create policy "Anyone can read comments"
+  on public.pop_comments for select using (true);
+
+create policy "Users can insert own comments"
+  on public.pop_comments for insert with check (auth.uid() = user_id);
+
+create policy "Users can delete own comments"
+  on public.pop_comments for delete using (auth.uid() = user_id);
 
 -- ─────────────────────────────────────────────
 -- WATCHLIST
@@ -207,6 +263,8 @@ create index on public.ranked_items (user_id, elo_score desc);
 create index on public.elo_matches (user_id, created_at desc);
 create index on public.feed_events (user_id, created_at desc);
 create index on public.follows (following_id);
+create index on public.pop_likes (feed_event_id);
+create index on public.pop_comments (feed_event_id, created_at);
 
 -- ─────────────────────────────────────────────
 -- REALTIME
