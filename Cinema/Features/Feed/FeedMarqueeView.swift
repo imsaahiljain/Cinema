@@ -360,15 +360,30 @@ struct FeedMarqueeView: View {
     @State private var activeCommentsPop: FeedPop?
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
-                Section {
+        GeometryReader { screenGeo in
+            // Poster size is a fixed fraction of screen width — computed once
+            // here, not derived from each card's own text height (see
+            // PopCard) — so every card's poster is the same real 2:3 poster
+            // shape regardless of how long that pop's title/caption is.
+            let cardContentWidth = screenGeo.size.width - 32 // 16pt horizontal padding each side
+            let posterWidth = cardContentWidth * 0.32
+
+            ScrollView {
+                // Not pinned: a sticky header here has no divider/shadow of
+                // its own, so it just reads as a solid rectangle slicing
+                // through whatever card is scrolling underneath it — letting
+                // it scroll away with the rest of the content avoids that
+                // instead of dressing up a floating-header treatment nothing
+                // else in the app uses.
+                LazyVStack(spacing: 16) {
+                    header
                     if vm.pops.isEmpty && vm.hasLoaded {
                         emptyState
                     } else {
                         ForEach(vm.pops) { pop in
                             PopCard(
                                 pop: pop,
+                                posterWidth: posterWidth,
                                 isExpanded: expandedIDs.contains(pop.id),
                                 onExpandTap: {
                                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -385,12 +400,10 @@ struct FeedMarqueeView: View {
                             )
                         }
                     }
-                } header: {
-                    header
                 }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 32)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 32)
         }
         .background(WarmTheme.background.ignoresSafeArea())
         .scrollContentBackground(.hidden)
@@ -437,36 +450,32 @@ struct FeedMarqueeView: View {
 
 // MARK: - Pop Card
 
-private struct CardHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
 private struct PopCard: View {
     let pop: FeedPop
+    // Fixed 2:3 poster ratio (TMDB's real ratio), a set width passed down
+    // from FeedMarqueeView (same value for every card, proportional to
+    // screen width) rather than measured from this card's own text height.
+    // That measurement approach — matching the poster to the text column —
+    // sounded deterministic but wasn't: real captions and titles vary a lot
+    // in how many lines they wrap to, so posters ended up visibly different
+    // sizes card to card (a short one-line caption produced a squashed,
+    // near-square poster next to a two-line caption's proper tall one).
+    // Fixing the poster's own size and letting the text column just be
+    // whatever height its own content needs keeps every poster the same
+    // real poster shape regardless of what that pop's text looks like.
+    let posterWidth: CGFloat
     let isExpanded: Bool
     let onExpandTap: () -> Void
     let onLikeTap: () -> Void
     let onCommentTap: () -> Void
     let onPosterTap: () -> Void
 
-    // Measured from the text column so the poster can match it exactly —
-    // an aspectRatio+maxHeight negotiation between two HStack children
-    // with no other anchor produced an oversized, ambiguous row height
-    // (dead white space below the text). A real measurement is
-    // deterministic instead.
-    @State private var contentHeight: CGFloat = 190
+    private var posterHeight: CGFloat { posterWidth * 3 / 2 }
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
-            // Per the design spec: fixed 2:3 poster ratio (TMDB's real
-            // ratio), spanning the full card height — width is derived
-            // from that height, not fixed, so it's a tall narrow rectangle
-            // that never needs to crop the image to fit.
             poster
-                .frame(width: contentHeight * 2 / 3, height: contentHeight)
+                .frame(width: posterWidth, height: posterHeight)
                 // Own corner radius matching the card's, not just relying on
                 // the outer card clip — that only rounds the two corners
                 // that happen to sit on the card's own boundary (left side),
@@ -535,11 +544,6 @@ private struct PopCard: View {
             }
             .padding(.trailing, 16)
             .padding(.vertical, 14)
-            .background(
-                GeometryReader { geo in
-                    Color.clear.preference(key: CardHeightKey.self, value: geo.size.height)
-                }
-            )
             .contentShape(Rectangle())
             .onTapGesture(perform: onExpandTap)
         }
@@ -547,9 +551,6 @@ private struct PopCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: Color(red: 60/255, green: 30/255, blue: 10/255).opacity(0.06), radius: 1, x: 0, y: 1)
         .shadow(color: Color(red: 60/255, green: 30/255, blue: 10/255).opacity(0.08), radius: 10, x: 0, y: 6)
-        .onPreferenceChange(CardHeightKey.self) { newHeight in
-            if newHeight > 0 { contentHeight = newHeight }
-        }
     }
 
     // Real poster from the film's actual tmdb_id — falls back to the
