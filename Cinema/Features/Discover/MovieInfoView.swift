@@ -10,15 +10,15 @@ private struct FeedEventRef: Identifiable {
 
 struct FriendTake: Identifiable {
     let id: UUID
-    let user: CinemaUser?
     let displayName: String
     let username: String
     let rankPosition: Int?
     let totalRanked: Int
     var isSelf: Bool = false
-    // The specific feed_events row this take posted, if any — nil when the ranking predates
-    // feed_events, or was made with "Keep this private" on (see RankingView.finish). Friends'
-    // Takes opens this exact post when present; falls back to the friend's profile otherwise.
+    // The feed_events row this take posted. Always present for a friend's take — loadFriendTakes
+    // skips any friend without one entirely (ranking predates feed_events, or was made with
+    // "Keep this private" on — see RankingView.finish) rather than showing a take with nothing
+    // to open. Only the self row goes through without one, since it's never tappable anyway.
     var feedEventID: UUID? = nil
 
     // Linear scale: #1 of N = 10.0, #N of N = 0.0
@@ -112,7 +112,7 @@ final class MovieInfoViewModel {
                 .from("ranked_items").select("id").eq("user_id", value: currentUserID)
                 .execute().value) ?? []
             takes.append(FriendTake(
-                id: currentUserID, user: nil, displayName: "You", username: "",
+                id: currentUserID, displayName: "You", username: "",
                 rankPosition: mine.rankPosition, totalRanked: allMine.count, isSelf: true
             ))
         }
@@ -139,9 +139,12 @@ final class MovieInfoViewModel {
 
         let profileMap = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
 
-        // The feed_events row backing each friend's take, so tapping it can open their actual
-        // post instead of just their profile. Grouped by user, keeping only the most recent
-        // event per user in case they've re-ranked (and re-posted) this same title over time.
+        // A "take" IS the post — Friends' Takes only ever opens a friend's actual pop, never
+        // their profile, so a friend without a feed_events row for this title (ranked it before
+        // feed_events existed, or with "Keep this private" on) has nothing to show and is
+        // skipped entirely rather than appearing as a dead-end row. Grouped by user, keeping
+        // only the most recent event per user in case they've re-ranked (and re-posted) this
+        // same title over time.
         struct FeedEventIDRow: Decodable {
             let id: UUID; let userID: UUID
             enum CodingKeys: String, CodingKey { case id; case userID = "user_id" }
@@ -158,17 +161,17 @@ final class MovieInfoViewModel {
         }
 
         for item in items {
-            guard let user = profileMap[item.userID] else { continue }
+            guard let user = profileMap[item.userID], let feedEventID = feedEventByUser[item.userID] else { continue }
             let allItems: [JustID] = (try? await SupabaseClient.shared
                 .from("ranked_items").select("id").eq("user_id", value: item.userID)
                 .execute().value) ?? []
             takes.append(FriendTake(
-                id: item.userID, user: user,
+                id: item.userID,
                 displayName: user.displayName ?? user.username,
                 username: user.username,
                 rankPosition: item.rankPosition,
                 totalRanked: allItems.count,
-                feedEventID: feedEventByUser[item.userID]
+                feedEventID: feedEventID
             ))
         }
         return takes
@@ -205,7 +208,6 @@ final class MovieInfoViewModel {
 struct MovieInfoView: View {
     let film: MediaItem
     @State private var vm = MovieInfoViewModel()
-    @State private var selectedFriend: CinemaUser?
     @State private var selectedFeedEventID: FeedEventRef?
     @State private var showAddToList = false
     @State private var showRanking = false
@@ -253,22 +255,6 @@ struct MovieInfoView: View {
             Task { await vm.load(film: film, currentUserID: appState.currentUser?.id) }
         }) {
             RankingView(film: film, onFinished: { dismiss() })
-        }
-        .sheet(item: $selectedFriend) { friend in
-            // UserProfileView is a NavigationStack *root* here (no back button of its own — that
-            // only exists when it's pushed onto an existing stack, as elsewhere in the app), so
-            // without an explicit close button this sheet had no way out — swiping down landed on
-            // the friend's ScrollView content instead of dismissing. Same fix already established
-            // in PeopleSearchView's identical sheet presentation of this same view.
-            NavigationStack {
-                UserProfileView(user: friend)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") { selectedFriend = nil }
-                                .foregroundStyle(CinemaTheme.Colors.gold)
-                        }
-                    }
-            }
         }
         .sheet(item: $selectedFeedEventID) { ref in
             PopDetailView(feedEventID: ref.id)
@@ -695,14 +681,11 @@ struct MovieInfoView: View {
             VStack(spacing: 8) {
                 ForEach(vm.friendTakes) { take in
                     Button {
-                        guard !take.isSelf else { return }
-                        // Prefer the actual post they made — falls back to their profile only
-                        // when no post exists (pre-feed_events ranking, or it was private).
-                        if let feedEventID = take.feedEventID {
-                            selectedFeedEventID = FeedEventRef(id: feedEventID)
-                        } else if let user = take.user {
-                            selectedFriend = user
-                        }
+                        // Every friend take shown here has a real post backing it —
+                        // loadFriendTakes already drops any that don't — so this always opens
+                        // their actual pop, never a profile.
+                        guard !take.isSelf, let feedEventID = take.feedEventID else { return }
+                        selectedFeedEventID = FeedEventRef(id: feedEventID)
                     } label: {
                         HStack(spacing: 12) {
                             ZStack {
