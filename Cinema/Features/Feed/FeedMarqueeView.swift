@@ -65,6 +65,15 @@ private func paletteColor(for userID: UUID) -> Color {
     avatarPalette[abs(userID.uuidString.hashValue) % avatarPalette.count]
 }
 
+// Fraction of the card's content width the poster takes up — shared by both
+// call sites (the feed list and PopDetailView) so they can't drift apart.
+// Sized down from an earlier 0.30: smaller keeps the poster from ever
+// needing to grow to chase a tall text column (name row + title + 2-line
+// caption + reaction row) — the poster stays fixed either way, so the fix
+// for "text taller than the poster" has to come from the text side, and a
+// narrower poster hands the text column the extra width it needs for that.
+let feedPosterWidthFraction: CGFloat = 0.26
+
 // MARK: - Pop (a real feed_events row, turned into a feed card)
 
 struct FeedPop: Identifiable {
@@ -427,7 +436,7 @@ struct FeedMarqueeView: View {
             // PopCard) — so every card's poster is the same real 2:3 poster
             // shape regardless of how long that pop's title/caption is.
             let cardContentWidth = screenGeo.size.width - 32 // 16pt horizontal padding each side
-            let posterWidth = cardContentWidth * 0.30
+            let posterWidth = cardContentWidth * feedPosterWidthFraction
 
             ScrollView {
                 // Not pinned: a sticky header here has no divider/shadow of
@@ -534,7 +543,7 @@ struct PopDetailView: View {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let pop = vm.pops.first(where: { $0.id == feedEventID }) {
                     GeometryReader { geo in
-                        let posterWidth = (geo.size.width - 32) * 0.30
+                        let posterWidth = (geo.size.width - 32) * feedPosterWidthFraction
                         ScrollView {
                             VStack(alignment: .leading, spacing: 20) {
                                 PopCard(
@@ -685,10 +694,16 @@ private struct PopCard: View {
                 }
 
                 HStack(alignment: .firstTextBaseline) {
+                    // Capped to 1 line (was 2) — a title's line count was the
+                    // biggest source of the gap below the poster on cards
+                    // with a long title: the text column would need more
+                    // room than the poster's fixed height, so the card grew
+                    // past it and left the poster short of the card's own
+                    // bottom edge. A long title just truncates now instead.
                     Text(pop.media.title)
                         .font(WarmTheme.Font.wordmark(19))
                         .foregroundStyle(WarmTheme.titleText)
-                        .lineLimit(2)
+                        .lineLimit(1)
                     Spacer(minLength: 8)
                     Text(pop.ratingLabel)
                         .font(WarmTheme.Font.wordmarkBold(15))
