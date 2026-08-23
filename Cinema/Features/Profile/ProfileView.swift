@@ -42,6 +42,15 @@ struct ActivityEntry: Identifiable {
     let updatedAt: Date
 }
 
+/// A real head-to-head duel pulled from `elo_matches` where the film you picked scores lower
+/// on TMDB than the one you passed over — grounded in an actual choice you made, not a guess
+/// at what might read as controversial.
+struct HotTake {
+    let preferred: MediaItem
+    let snubbed: MediaItem
+    let scoreGap: Double
+}
+
 // MARK: - ViewModel
 
 @Observable
@@ -52,6 +61,7 @@ final class ProfileViewModel {
     var leastLikedFilms: [MediaItem] = []
     var favoriteGenre: String?
     var favoriteGenreFilms: [MediaItem] = []
+    var hotTake: HotTake?
     var recentActivity: [ActivityEntry] = []
     var followerCount: Int = 0
     var followingCount: Int = 0
@@ -113,6 +123,7 @@ final class ProfileViewModel {
                 }
                 leastLikedFilms = leastLoaded
                 await loadFavoriteGenre(items: Array(items.prefix(20)))
+                await loadHotTake(userID: userID)
             }
 
             // No `tasteProfile == nil` guard — always recompute on every load so re-ranking
@@ -206,6 +217,58 @@ final class ProfileViewModel {
             .compactMap { mediaByItem[$0.id] }
     }
 
+    /// "Biggest upset" read of `elo_matches`: among your most recent duels, the one where the
+    /// film you picked has the largest TMDB-vote-average deficit against the film it beat.
+    /// Working off actual recorded picks rather than inferring from rank position is what
+    /// makes this a real hot take instead of a guess.
+    private func loadHotTake(userID: UUID) async {
+        guard let matches: [ELOMatch] = try? await SupabaseClient.shared
+            .from("elo_matches")
+            .select()
+            .eq("user_id", value: userID)
+            .order("created_at", ascending: false)
+            .limit(25)
+            .execute()
+            .value, !matches.isEmpty else {
+            hotTake = nil
+            return
+        }
+
+        struct Key: Hashable { let id: Int; let type: MediaType }
+        var keys = Set<Key>()
+        for m in matches {
+            guard let type = MediaType(rawValue: m.mediaType) else { continue }
+            keys.insert(Key(id: m.winnerTmdbID, type: type))
+            keys.insert(Key(id: m.loserTmdbID, type: type))
+        }
+
+        var mediaByKey: [Key: MediaItem] = [:]
+        await withTaskGroup(of: (Key, MediaItem?).self) { group in
+            for key in keys {
+                group.addTask {
+                    let media = try? await TMDBClient.shared.details(tmdbID: key.id, mediaType: key.type)
+                    return (key, media)
+                }
+            }
+            for await (key, media) in group {
+                if let media { mediaByKey[key] = media }
+            }
+        }
+
+        var best: HotTake?
+        for m in matches {
+            guard let type = MediaType(rawValue: m.mediaType),
+                  let preferred = mediaByKey[Key(id: m.winnerTmdbID, type: type)],
+                  let snubbed = mediaByKey[Key(id: m.loserTmdbID, type: type)],
+                  let preferredScore = preferred.voteAverage, let snubbedScore = snubbed.voteAverage else { continue }
+            let gap = snubbedScore - preferredScore
+            if gap > 0.5, (best == nil || gap > best!.scoreGap) {
+                best = HotTake(preferred: preferred, snubbed: snubbed, scoreGap: gap)
+            }
+        }
+        hotTake = best
+    }
+
     /// Weighted by ELO score, not raw frequency — a film ranked #1 pulls harder toward its
     /// genres/cast than one ranked #24, so this reflects actual favorites rather than just
     /// whatever shows up most often across 25 ranked items regardless of how they scored.
@@ -270,6 +333,8 @@ struct ProfileView: View {
     @State private var showPeopleSearch = false
     @State private var showEditProfile = false
     @State private var carouselPage = 0
+    @State private var isSelectingShare = false
+    @State private var selectedSharePages: Set<CarouselPage> = []
     @State private var favoritesTab: FavoritesTab = .activity
     @AppStorage("cinema_dev_fingerprint") private var devFingerprintUnlocked = false
 
@@ -437,14 +502,15 @@ struct ProfileView: View {
         .padding(.bottom, 36)
     }
 
-    // MARK: - Film Carousel (Top Films / Least Liked / Favorite Genre)
+    // MARK: - Film Carousel (Top Films / Least Liked / Favorite Genre / Hot Takes)
 
-    private enum CarouselPage { case topFilms, leastLiked, favoriteGenre }
+    private enum CarouselPage: Hashable { case topFilms, leastLiked, favoriteGenre, hotTake }
 
     private var carouselPages: [CarouselPage] {
         var pages: [CarouselPage] = [.topFilms]
         if !vm.leastLikedFilms.isEmpty { pages.append(.leastLiked) }
         if !vm.favoriteGenreFilms.isEmpty { pages.append(.favoriteGenre) }
+        if vm.hotTake != nil { pages.append(.hotTake) }
         return pages
     }
 
@@ -453,22 +519,61 @@ struct ProfileView: View {
         case .topFilms: return "Top Films"
         case .leastLiked: return "Least Liked"
         case .favoriteGenre: return "Favorite Genre"
+        case .hotTake: return "Hot Takes"
         }
     }
 
-    // The share button used to float on top of the poster grid itself — moved up here,
-    // level with "Swipe for more", so it reads as a control for the carousel rather than
-    // a stamp on the posters.
-    private var currentShareContent: StoryShareContent? {
-        guard carouselPage < carouselPages.count else { return nil }
-        switch carouselPages[carouselPage] {
+    // What a given page would hand to the share sheet if selected — used both to decide
+    // whether the share button shows at all, and to build the actual list of cards once the
+    // user has picked which pages to share.
+    private func shareContent(for page: CarouselPage) -> ShareCardContent? {
+        switch page {
         case .topFilms:
-            return vm.topFilms.isEmpty ? nil : .posterGrid(films: vm.topFilms, title: "Top Films")
+            return vm.topFilms.isEmpty ? nil : .topFilms(films: vm.topFilms)
         case .leastLiked:
-            return vm.leastLikedFilms.isEmpty ? nil : .posterGrid(films: vm.leastLikedFilms, title: "Least Liked")
+            return vm.leastLikedFilms.isEmpty ? nil : .leastLiked(films: vm.leastLikedFilms)
         case .favoriteGenre:
-            return vm.favoriteGenreFilms.isEmpty ? nil : .posterGrid(films: vm.favoriteGenreFilms, title: vm.favoriteGenre ?? "Favorite Genre")
+            guard let genre = vm.favoriteGenre, !vm.favoriteGenreFilms.isEmpty else { return nil }
+            let denominator = max(min(vm.allRankedItems.count, 20), 1)
+            let percent = Int((Double(vm.favoriteGenreFilms.count) / Double(denominator)) * 100)
+            return .favoriteGenre(genre: genre, films: vm.favoriteGenreFilms, sharePercent: percent)
+        case .hotTake:
+            guard let hotTake = vm.hotTake else { return nil }
+            return .hotTake(hotTake)
         }
+    }
+
+    private var currentCarouselPage: CarouselPage {
+        carouselPages.indices.contains(carouselPage) ? carouselPages[carouselPage] : .topFilms
+    }
+
+    // MARK: Share selection (Photos-style: tap share, keep swiping, tap more pages to add)
+
+    private func beginShareSelection() {
+        selectedSharePages = [currentCarouselPage]
+        isSelectingShare = true
+    }
+
+    private func endShareSelection() {
+        isSelectingShare = false
+        selectedSharePages = []
+    }
+
+    private func toggleSelection(for page: CarouselPage) {
+        if selectedSharePages.contains(page) {
+            selectedSharePages.remove(page)
+        } else {
+            selectedSharePages.insert(page)
+        }
+    }
+
+    private func confirmShareSelection() async {
+        // Iterate `carouselPages` rather than the (unordered) Set so the share sheet gets the
+        // images in the same order they appear in the carousel.
+        let contents = carouselPages.filter { selectedSharePages.contains($0) }.compactMap { shareContent(for: $0) }
+        guard !contents.isEmpty else { return }
+        await ShareCardService.share(contents, user: appState.currentUser)
+        endShareSelection()
     }
 
     private var filmCarouselSection: some View {
@@ -492,15 +597,23 @@ struct ProfileView: View {
             .animation(.easeInOut(duration: 0.15), value: carouselPage)
 
             HStack {
-                if carouselPages.count > 1 {
-                    Text("Swipe for more")
-                        .font(.system(size: 11))
-                        .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.7))
-                }
-                Spacer()
-                if let content = currentShareContent {
-                    shareButton {
-                        Task { await StoryShareService.share(content, user: appState.currentUser) }
+                if isSelectingShare {
+                    Button("Cancel") { endShareSelection() }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(CinemaTheme.Colors.gold)
+                    Spacer()
+                    Text(selectedSharePages.isEmpty ? "Tap a page to select" : "\(selectedSharePages.count) selected")
+                        .font(.system(size: 12))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                } else {
+                    if carouselPages.count > 1 {
+                        Text("Swipe for more")
+                            .font(.system(size: 11))
+                            .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.7))
+                    }
+                    Spacer()
+                    if shareContent(for: currentCarouselPage) != nil {
+                        shareButton { beginShareSelection() }
                     }
                 }
             }
@@ -515,18 +628,64 @@ struct ProfileView: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             .aspectRatio(2/3, contentMode: .fit)
             .padding(.horizontal, CinemaTheme.Spacing.lg)
+            .overlay(alignment: .topTrailing) {
+                // Same spot as Photos' per-thumbnail selection circle — tap to add or remove
+                // the page currently on screen without leaving the carousel or losing your
+                // swipe position.
+                if isSelectingShare {
+                    selectionCheckmark.padding(.trailing, CinemaTheme.Spacing.lg + 10).padding(.top, 10)
+                }
+            }
             .onChange(of: carouselPages.count) { _, newCount in
                 if carouselPage >= newCount { carouselPage = 0 }
+            }
+
+            if isSelectingShare {
+                Button {
+                    Task { await confirmShareSelection() }
+                } label: {
+                    Text(selectedSharePages.isEmpty ? "Select a page to share" : "Share \(selectedSharePages.count) page\(selectedSharePages.count == 1 ? "" : "s")")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background(CinemaTheme.Colors.gold)
+                        .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
+                }
+                .disabled(selectedSharePages.isEmpty)
+                .opacity(selectedSharePages.isEmpty ? 0.5 : 1)
+                .padding(.horizontal, CinemaTheme.Spacing.lg)
+                .padding(.top, 12)
             }
         }
         .padding(.bottom, 36)
     }
 
-    // Every page is a poster grid with an optional corner badge — Top Films badges its #1,
-    // Favorite Genre badges the genre name on the film that earned it, Least Liked has no
-    // badge. Keeping all three on one component is deliberate: the first version gave
-    // Favorite Genre a bespoke "one word floating in a dark box" layout and it read as an
-    // empty, unfinished page next to the other two real poster grids.
+    private var selectionCheckmark: some View {
+        let isSelected = selectedSharePages.contains(currentCarouselPage)
+        return Button {
+            toggleSelection(for: currentCarouselPage)
+        } label: {
+            ZStack {
+                Circle().fill(isSelected ? CinemaTheme.Colors.gold : Color.black.opacity(0.45))
+                Circle().strokeBorder(.white.opacity(isSelected ? 0 : 0.6), lineWidth: 1.5)
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.black)
+                }
+            }
+            .frame(width: 26, height: 26)
+        }
+        .accessibilityLabel(isSelected ? "Deselect page" : "Select page")
+    }
+
+    // Top Films / Least Liked / Favorite Genre share one poster-grid component with an
+    // optional corner badge — Top Films badges its #1, Favorite Genre badges the genre name
+    // on the film that earned it, Least Liked has no badge. Hot Takes breaks from the grid
+    // (see `hotTakeCard` below) since its content is a two-film comparison, not a collection —
+    // forcing that into a 9-up grid read as an empty, unfinished page the same way an early
+    // version of Favorite Genre did before it got real poster content.
     @ViewBuilder
     private func carouselCard(for page: CarouselPage) -> some View {
         switch page {
@@ -548,7 +707,50 @@ struct ProfileView: View {
                 cornerBadge: { i in i == 0 ? vm.favoriteGenre?.uppercased() : nil },
                 emptyText: "Rank a few more films to see your favorite genre."
             )
+        case .hotTake:
+            if let hotTake = vm.hotTake {
+                hotTakeCard(hotTake)
+            } else {
+                EmptyView()
+            }
         }
+    }
+
+    // Two posters + the statement, not a 9-up grid — a hot take is a comparison between two
+    // specific films, so the on-screen page shows exactly those two rather than forcing the
+    // grid layout every other page uses onto content that isn't a collection.
+    private func hotTakeCard(_ hotTake: HotTake) -> some View {
+        // Width-driven, not height-driven — same approach the poster grid pages use: give
+        // each poster an equal share of the available width and let `aspectRatio(.fit)`
+        // derive its height from that, rather than forcing a height and hoping the width
+        // works out. A `.frame(height:)` on the HStack computed as a fraction of the card's
+        // own height overflowed the card, since two full-height 2:3 posters side by side need
+        // more width than a phone-width card actually has. `.clipped()` stays on as a backstop
+        // regardless.
+        VStack(spacing: 14) {
+            HStack(spacing: 10) {
+                PosterImage(path: hotTake.preferred.posterPath, cornerRadius: CinemaTheme.Radius.md)
+                    .aspectRatio(2/3, contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+                PosterImage(path: hotTake.snubbed.posterPath, cornerRadius: CinemaTheme.Radius.md)
+                    .aspectRatio(2/3, contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+            }
+
+            Text("\(Text(hotTake.preferred.title).fontWeight(.bold)) over \(Text(hotTake.snubbed.title).fontWeight(.bold))")
+                .font(.system(size: 13))
+                .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .padding(.horizontal, 12)
+
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(CinemaTheme.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
+        .clipped()
     }
 
     private func posterGridCard(films: [MediaItem], cornerBadge: @escaping (Int) -> String?, emptyText: String) -> some View {
@@ -840,6 +1042,7 @@ struct SettingsView: View {
     @State private var showDeleteConfirm = false
     @State private var isDeletingAccount = false
     @State private var deleteErrorMessage: String?
+    @State private var showCaptionDebug = false
 
     var body: some View {
         NavigationStack {
@@ -925,6 +1128,39 @@ struct SettingsView: View {
                                 }
                                 .padding(.horizontal, CinemaTheme.Spacing.lg)
                                 .padding(.vertical, 12)
+
+                                Divider().background(CinemaTheme.Colors.border).padding(.leading, 60)
+
+                                // Jumps straight to RankingView's "ranked!" / caption screen with
+                                // mock data — for hand-testing that specific screen (keyboard
+                                // behavior, layout) without spending a real ranking on every check.
+                                Button { showCaptionDebug = true } label: {
+                                    HStack(spacing: 14) {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 7)
+                                                .fill(Color.purple)
+                                                .frame(width: 32, height: 32)
+                                            Image(systemName: "text.bubble.fill")
+                                                .font(.system(size: 15, weight: .medium))
+                                                .foregroundStyle(.white)
+                                        }
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Caption Screen Preview")
+                                                .font(.system(size: 16))
+                                                .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                                            Text("Jumps to the ranked/caption screen with mock data")
+                                                .font(.system(size: 12))
+                                                .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                                    }
+                                    .padding(.horizontal, CinemaTheme.Spacing.lg)
+                                    .padding(.vertical, 12)
+                                }
+                                .buttonStyle(.plain)
                             }
                             .background(CinemaTheme.Colors.surface)
                             .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
@@ -1003,6 +1239,9 @@ struct SettingsView: View {
                 if let user = appState.currentUser {
                     EditProfileView(user: user)
                 }
+            }
+            .sheet(isPresented: $showCaptionDebug) {
+                RankingResultDebugPreview()
             }
             .confirmationDialog(
                 "Delete your account?",
