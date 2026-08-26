@@ -955,59 +955,52 @@ struct ProfileView: View {
         }
     }
 
-    // Both subsections now share one visual language — caption label above, real content
-    // below, own card — instead of the old side-by-side "label column + inline chips" row
-    // that was designed for a cramped single-column section and never got wider once this
-    // moved into its own full-width tab.
+    // Genre rows and the director/cast list both run the full column top-to-bottom now —
+    // the old version put genres in a horizontal-scrolling pill row and cast in a second
+    // horizontal scroller, so on a tall narrow screen it read as two thin strips floating
+    // over a lot of empty background. Weight bars use the real ELO-normalized score from
+    // loadTasteProfile rather than a fixed 1st/2nd/3rd guess, and cast/director reuse this
+    // screen's own divided-row idiom (see SettingsRow above) instead of a bespoke card.
     private func unlockedFingerprintView(_ profile: TasteProfile) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 32) {
             if !profile.topGenres.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 14) {
                     Text("GENRES")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(CinemaTheme.Colors.textSecondary)
                         .padding(.horizontal, CinemaTheme.Spacing.lg)
 
-                    HStack(spacing: 10) {
-                        ForEach(Array(profile.topGenres.enumerated()), id: \.element) { i, genre in
-                            HStack(spacing: 6) {
-                                Text("#\(i + 1)")
-                                    .font(.system(size: 12, weight: .black))
-                                    .foregroundStyle(CinemaTheme.Colors.gold)
-                                Text(genre)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(CinemaTheme.Colors.surface)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
+                    VStack(spacing: 14) {
+                        ForEach(Array(profile.topGenres.enumerated()), id: \.element.id) { i, genre in
+                            GenreWeightRow(rank: i + 1, genre: genre)
                         }
-                        Spacer(minLength: 0)
                     }
                     .padding(.horizontal, CinemaTheme.Spacing.lg)
                 }
             }
 
             if profile.favoriteDirector != nil || !profile.favoriteActors.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 14) {
                     Text("DIRECTOR & CAST")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(CinemaTheme.Colors.textSecondary)
                         .padding(.horizontal, CinemaTheme.Spacing.lg)
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 20) {
-                            if let director = profile.favoriteDirector {
-                                PersonAvatarCard(person: director, roleLabel: "Director", size: 84)
-                            }
-                            ForEach(profile.favoriteActors) { actor in
-                                PersonAvatarCard(person: actor, roleLabel: nil, size: 84)
+                    VStack(spacing: 0) {
+                        if let director = profile.favoriteDirector {
+                            PersonFingerprintRow(person: director, roleLabel: "Director")
+                            if !profile.favoriteActors.isEmpty {
+                                Divider().background(CinemaTheme.Colors.border).padding(.leading, 74)
                             }
                         }
-                        .padding(.horizontal, CinemaTheme.Spacing.lg)
+                        ForEach(Array(profile.favoriteActors.enumerated()), id: \.element.id) { i, actor in
+                            PersonFingerprintRow(person: actor, roleLabel: nil)
+                            if i < profile.favoriteActors.count - 1 {
+                                Divider().background(CinemaTheme.Colors.border).padding(.leading, 74)
+                            }
+                        }
                     }
+                    .padding(.horizontal, CinemaTheme.Spacing.lg)
                 }
             }
         }
@@ -1015,15 +1008,52 @@ struct ProfileView: View {
 
 }
 
-// MARK: - Person Avatar Card (Director & Cast — same treatment as MovieInfoView's Cast & Crew)
+// MARK: - Genre Weight Row (Taste Profile)
 
-private struct PersonAvatarCard: View {
-    let person: TasteProfile.WeightedPerson
-    var roleLabel: String? = nil
-    var size: CGFloat = 72
+private struct GenreWeightRow: View {
+    let rank: Int
+    let genre: TasteProfile.WeightedGenre
+
+    private var rankColor: Color {
+        switch rank {
+        case 1: return CinemaTheme.Colors.gold
+        case 2: return CinemaTheme.Colors.gold.opacity(0.65)
+        default: return CinemaTheme.Colors.gold.opacity(0.4)
+        }
+    }
 
     var body: some View {
-        VStack(spacing: 8) {
+        HStack(spacing: 12) {
+            Text("\(rank)")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(rankColor)
+                .frame(width: 14, alignment: .leading)
+
+            Text(genre.name)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                .frame(width: 74, alignment: .leading)
+                .lineLimit(1)
+
+            GeometryReader { geo in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(rankColor)
+                    .frame(width: geo.size.width * max(0.08, min(1, genre.weight)), height: 4)
+                    .frame(maxHeight: .infinity, alignment: .center)
+            }
+            .frame(height: 4)
+        }
+    }
+}
+
+// MARK: - Person Fingerprint Row (Director & Cast — a divided row list, not a card)
+
+private struct PersonFingerprintRow: View {
+    let person: TasteProfile.WeightedPerson
+    var roleLabel: String? = nil
+
+    var body: some View {
+        HStack(spacing: 14) {
             Group {
                 if let path = person.profilePath, let url = TMDBClient.shared.profileImageURL(path: path) {
                     AsyncImage(url: url) { phase in
@@ -1032,23 +1062,30 @@ private struct PersonAvatarCard: View {
                     }
                 } else { placeholder }
             }
-            .frame(width: size, height: size).clipShape(Circle())
+            .frame(width: 44, height: 44)
+            .clipShape(Circle())
             .overlay(Circle().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
 
-            VStack(spacing: 2) {
-                Text(person.name).font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(CinemaTheme.Colors.textPrimary).lineLimit(2).multilineTextAlignment(.center)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(person.name)
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                    .lineLimit(1)
                 if let roleLabel {
-                    Text(roleLabel).font(.system(size: 11)).foregroundStyle(CinemaTheme.Colors.textSecondary).lineLimit(1)
+                    Text(roleLabel)
+                        .font(.system(size: 12))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
                 }
             }
-            .frame(width: 80)
+
+            Spacer(minLength: 0)
         }
+        .padding(.vertical, 10)
     }
 
     private var placeholder: some View {
         CinemaTheme.Colors.surface.overlay(
-            Image(systemName: "person.fill").font(.system(size: 28)).foregroundStyle(CinemaTheme.Colors.border)
+            Image(systemName: "person.fill").font(.system(size: 16)).foregroundStyle(CinemaTheme.Colors.border)
         )
     }
 }
