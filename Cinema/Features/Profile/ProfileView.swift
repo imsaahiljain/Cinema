@@ -10,12 +10,24 @@ struct TasteProfile {
         let profilePath: String?
     }
 
-    let topGenres: [String]
+    // `weight` is this genre's ELO score normalized against the #1 genre's, so the UI can
+    // size a bar off real ranking behavior instead of just a fixed 1st/2nd/3rd guess.
+    struct WeightedGenre: Identifiable {
+        var id: String { name }
+        let name: String
+        let weight: Double
+    }
+
+    let topGenres: [WeightedGenre]
     let favoriteDirector: WeightedPerson?
     let favoriteActors: [WeightedPerson]
 
     static let mock = TasteProfile(
-        topGenres: ["Drama", "Thriller", "Sci-Fi"],
+        topGenres: [
+            WeightedGenre(name: "Drama", weight: 1.0),
+            WeightedGenre(name: "Thriller", weight: 0.74),
+            WeightedGenre(name: "Sci-Fi", weight: 0.52),
+        ],
         favoriteDirector: WeightedPerson(id: 525, name: "Christopher Nolan", profilePath: "/xuAIuYSmsUzKlUMBFGVZaWsY3DZ.jpg"),
         favoriteActors: [
             WeightedPerson(id: 31, name: "Tom Hanks", profilePath: "/xndWFsBlClOJFRdhziRzhaWQjEB.jpg"),
@@ -123,7 +135,12 @@ final class ProfileViewModel {
                 }
                 leastLikedFilms = leastLoaded
                 await loadFavoriteGenre(items: Array(items.prefix(20)))
-                await loadHotTake(userID: userID)
+                // Hot Takes disabled — pulled to post-production (2026-08-23). Its "biggest
+                // upset" logic leans on TMDB's vote_average as the ground truth for which film
+                // is objectively worse, and that's not a data source we trust for that call.
+                // `loadHotTake`/`HotTake`/the `.hotTake` carousel case all stay in place so this
+                // is a one-line revert once there's a rating source worth building it on.
+                // await loadHotTake(userID: userID)
             }
 
             // No `tasteProfile == nil` guard — always recompute on every load so re-ranking
@@ -310,7 +327,11 @@ final class ProfileViewModel {
             }
         }
 
-        let topGenres = Array(genreScore.sorted { $0.value > $1.value }.prefix(3).map(\.key))
+        let topGenreEntries = Array(genreScore.sorted { $0.value > $1.value }.prefix(3))
+        let topGenreScore = topGenreEntries.first?.value ?? 0
+        let topGenres = topGenreEntries.map {
+            TasteProfile.WeightedGenre(name: $0.key, weight: topGenreScore > 0 ? $0.value / topGenreScore : 0)
+        }
         let topDirector = directorScore.values.max(by: { $0.score < $1.score })
         let topActors = actorScore.values.sorted { $0.score > $1.score }.prefix(3)
 
@@ -510,7 +531,8 @@ struct ProfileView: View {
         var pages: [CarouselPage] = [.topFilms]
         if !vm.leastLikedFilms.isEmpty { pages.append(.leastLiked) }
         if !vm.favoriteGenreFilms.isEmpty { pages.append(.favoriteGenre) }
-        if vm.hotTake != nil { pages.append(.hotTake) }
+        // .hotTake withheld — see the `loadHotTake` call site in ProfileViewModel.load for why.
+        // vm.hotTake is never populated right now, so this is belt-and-suspenders, not load-bearing.
         return pages
     }
 
