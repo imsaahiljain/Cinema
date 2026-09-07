@@ -30,8 +30,8 @@ struct TasteProfile {
         ],
         favoriteDirector: WeightedPerson(id: 525, name: "Christopher Nolan", profilePath: "/xuAIuYSmsUzKlUMBFGVZaWsY3DZ.jpg"),
         favoriteActors: [
-            WeightedPerson(id: 31, name: "Tom Hanks", profilePath: "/xndWFsBlClOJFRdhziRzhaWQjEB.jpg"),
-            WeightedPerson(id: 5081, name: "Cate Blanchett", profilePath: "/nJRciH8VXDbg496OG7RsAibkxRy.jpg"),
+            WeightedPerson(id: 31, name: "Tom Hanks", profilePath: "/oFvZoKI6lvU03n4YoNGAll9rkas.jpg"),
+            WeightedPerson(id: 5081, name: "Cate Blanchett", profilePath: "/mjvs6fx2v9237HCLYZbgh3QQASb.jpg"),
             WeightedPerson(id: 90633, name: "Timothée Chalamet", profilePath: "/BE2sdjpgsa2rNTFa66f7upkaOP.jpg"),
         ]
     )
