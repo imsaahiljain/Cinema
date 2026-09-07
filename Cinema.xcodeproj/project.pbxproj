@@ -19,7 +19,6 @@
 		3B47F84367E892F3B2930035 /* DiagonalOverarchWinEffect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 479F67E8B319479E66ACF14A /* DiagonalOverarchWinEffect.swift */; };
 		3E27001FEEFFB92A621450FF /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3547E670F15122040C67802 /* AuthView.swift */; };
 		3F42334E5A16E2DC2C1B98A6 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B8A564A01E418389F6CB0E8 /* AppState.swift */; };
-		4217CB4BB1014DAB5137B702 /* StoryShareService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 836B36E24F91CCC9750E2EF5 /* StoryShareService.swift */; };
 		4B798F0E6BB264BE4FAC2E88 /* LibreCaslonText-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3EF308B64CE30E426236C07C /* LibreCaslonText-Regular.ttf */; };
 		4FD7FC5889D63BB95AF2948A /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C83E1A7A3D9EE17085F23C6C /* RootView.swift */; };
 		59606C18B058A3EA2FF7817C /* TMDBClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD02B3CF21F04A2669A89234 /* TMDBClient.swift */; };
@@ -28,6 +27,7 @@
 		677151F79942E0B4FED24F67 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3DA5F7D1A0859DF4CEB3703 /* DiscoverView.swift */; };
 		682A089F56AA1DD388E3383D /* ListsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530C7F0DB52CAC3077C9CD1F /* ListsView.swift */; };
 		71F4E38D958B04CF4095E790 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19DC63385B01DB8197C52FB5 /* SearchView.swift */; };
+		757B0081B953C48892A4550E /* ShareCardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3C22225DAE6B21AC19378F /* ShareCardService.swift */; };
 		77EC1A99DEF36338EEB17EBC /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 083082767AFFFA05A82D3F8A /* SupabaseClient.swift */; };
 		7C4CA3F23C3A5C425A37375D /* GlassCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400E820CB0EC0231B9067CF3 /* GlassCard.swift */; };
 		8209A44BA41B65508968E11A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C938C3BDAD6776A47E6C5A38 /* Assets.xcassets */; };
@@ -80,7 +80,6 @@
 		65258A723C1CD4E5EA116234 /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
 		716F3EF3F2B0C5963A9A3BA9 /* CinemaUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CinemaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		82ECD83DF5DBD40D16BCE440 /* NunitoSans-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "NunitoSans-Bold.ttf"; sourceTree = "<group>"; };
-		836B36E24F91CCC9750E2EF5 /* StoryShareService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryShareService.swift; sourceTree = "<group>"; };
 		A3BD8BDAB9CC17FD0B896A6D /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		A5D65343706BC8CD34661074 /* CinemaUser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaUser.swift; sourceTree = "<group>"; };
 		B00768B59A655BABAFB17CD6 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
@@ -92,6 +91,7 @@
 		D2897154F9235706C8E36A22 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		D3DA5F7D1A0859DF4CEB3703 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		D937843E51844F3C60087C3C /* ELOService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ELOService.swift; sourceTree = "<group>"; };
+		DA3C22225DAE6B21AC19378F /* ShareCardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareCardService.swift; sourceTree = "<group>"; };
 		DC2B8C90D80D6BC066B7EED5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E0506113DA15DB8A2B426843 /* NunitoSans-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "NunitoSans-SemiBold.ttf"; sourceTree = "<group>"; };
 		E3547E670F15122040C67802 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
@@ -130,7 +130,7 @@
 			isa = PBXGroup;
 			children = (
 				D937843E51844F3C60087C3C /* ELOService.swift */,
-				836B36E24F91CCC9750E2EF5 /* StoryShareService.swift */,
+				DA3C22225DAE6B21AC19378F /* ShareCardService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -471,7 +471,7 @@
 				26357C71D51E0F5A3D9D1CF6 /* SearchConfig.swift in Sources */,
 				71F4E38D958B04CF4095E790 /* SearchView.swift in Sources */,
 				9508C0F2E6498FBEDF0C149B /* Secrets.swift in Sources */,
-				4217CB4BB1014DAB5137B702 /* StoryShareService.swift in Sources */,
+				757B0081B953C48892A4550E /* ShareCardService.swift in Sources */,
 				77EC1A99DEF36338EEB17EBC /* SupabaseClient.swift in Sources */,
 				59606C18B058A3EA2FF7817C /* TMDBClient.swift in Sources */,
 				12AF8C29F544B41FA08E1764 /* WarmTheme.swift in Sources */,

@@ -206,6 +206,7 @@ struct ListsView: View {
     @State private var selection: ListsSelection = .watched
     @State private var showCreateList = false
     @State private var rankingFilm: MediaItem?
+    @State private var selectedFilm: MediaItem?
     @State private var listPendingDelete: CustomList?
     @State private var watchlistEntryPendingDelete: WatchlistEntry?
     @State private var listItemPendingDelete: ListItem?
@@ -235,7 +236,7 @@ struct ListsView: View {
 
             // Same reasoning as MovieInfoView — this page's cream background is
             // even brighter than the system's own sheet dimming can mask on its own.
-            if rankingFilm != nil {
+            if rankingFilm != nil || selectedFilm != nil {
                 Color.black.opacity(0.82).ignoresSafeArea()
             }
         }
@@ -260,6 +261,7 @@ struct ListsView: View {
         }) { film in
             RankingView(film: film)
         }
+        .sheet(item: $selectedFilm) { MovieInfoView(film: $0) }
         .alert(
             "Delete \u{201C}\(listPendingDelete?.name ?? "")\u{201D}?",
             isPresented: Binding(
@@ -402,7 +404,8 @@ struct ListsView: View {
                     PosterRow(
                         rank: index + 1,
                         media: vm.films[item.tmdbID],
-                        tmdbID: item.tmdbID
+                        tmdbID: item.tmdbID,
+                        onPosterTap: { selectedFilm = vm.films[item.tmdbID] }
                     ) {
                         if unlocked {
                             Text(String(format: "%.1f", ratingOutOf10(rankPosition: index + 1, totalRanked: vm.rankedItems.count)))
@@ -448,7 +451,12 @@ struct ListsView: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(vm.watchlistItems.enumerated()), id: \.element.id) { index, entry in
-                        PosterRow(rank: nil, media: vm.films[entry.tmdbID], tmdbID: entry.tmdbID) {
+                        PosterRow(
+                            rank: nil,
+                            media: vm.films[entry.tmdbID],
+                            tmdbID: entry.tmdbID,
+                            onPosterTap: { selectedFilm = vm.films[entry.tmdbID] }
+                        ) {
                             RankItButton {
                                 Task {
                                     await vm.removeFromWatchlist(entry: entry)
@@ -483,7 +491,12 @@ struct ListsView: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        PosterRow(rank: nil, media: vm.films[item.tmdbID], tmdbID: item.tmdbID) {
+                        PosterRow(
+                            rank: nil,
+                            media: vm.films[item.tmdbID],
+                            tmdbID: item.tmdbID,
+                            onPosterTap: { selectedFilm = vm.films[item.tmdbID] }
+                        ) {
                             RankItButton {
                                 rankingFilm = vm.films[item.tmdbID]
                             }
@@ -574,6 +587,7 @@ private struct PosterRow<Trailing: View>: View {
     let rank: Int?
     let media: MediaItem?
     let tmdbID: Int
+    let onPosterTap: () -> Void
     @ViewBuilder let trailing: () -> Trailing
 
     private var rankColor: Color {
@@ -590,9 +604,12 @@ private struct PosterRow<Trailing: View>: View {
                     .frame(width: 30, alignment: .center)
             }
 
-            poster
-                .frame(width: 56, height: 84)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            Button(action: onPosterTap) {
+                poster
+                    .frame(width: 56, height: 84)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(media?.title ?? "Loading\u{2026}")

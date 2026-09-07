@@ -724,6 +724,18 @@ private struct NotificationsStep: View {
             CinemaTheme.Colors.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
+                HStack {
+                    Button { vm.back() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                            .frame(width: 44, height: 44)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, CinemaTheme.Spacing.lg)
+                .padding(.top, 12)
+
                 Spacer()
 
                 Image(systemName: "bell.badge.fill")

@@ -10,16 +10,28 @@ struct TasteProfile {
         let profilePath: String?
     }
 
-    let topGenres: [String]
+    // `weight` is this genre's ELO score normalized against the #1 genre's, so the UI can
+    // size a bar off real ranking behavior instead of just a fixed 1st/2nd/3rd guess.
+    struct WeightedGenre: Identifiable {
+        var id: String { name }
+        let name: String
+        let weight: Double
+    }
+
+    let topGenres: [WeightedGenre]
     let favoriteDirector: WeightedPerson?
     let favoriteActors: [WeightedPerson]
 
     static let mock = TasteProfile(
-        topGenres: ["Drama", "Thriller", "Sci-Fi"],
+        topGenres: [
+            WeightedGenre(name: "Drama", weight: 1.0),
+            WeightedGenre(name: "Thriller", weight: 0.74),
+            WeightedGenre(name: "Sci-Fi", weight: 0.52),
+        ],
         favoriteDirector: WeightedPerson(id: 525, name: "Christopher Nolan", profilePath: "/xuAIuYSmsUzKlUMBFGVZaWsY3DZ.jpg"),
         favoriteActors: [
-            WeightedPerson(id: 31, name: "Tom Hanks", profilePath: "/xndWFsBlClOJFRdhziRzhaWQjEB.jpg"),
-            WeightedPerson(id: 5081, name: "Cate Blanchett", profilePath: "/nJRciH8VXDbg496OG7RsAibkxRy.jpg"),
+            WeightedPerson(id: 31, name: "Tom Hanks", profilePath: "/oFvZoKI6lvU03n4YoNGAll9rkas.jpg"),
+            WeightedPerson(id: 5081, name: "Cate Blanchett", profilePath: "/mjvs6fx2v9237HCLYZbgh3QQASb.jpg"),
             WeightedPerson(id: 90633, name: "Timothée Chalamet", profilePath: "/BE2sdjpgsa2rNTFa66f7upkaOP.jpg"),
         ]
     )
@@ -42,6 +54,15 @@ struct ActivityEntry: Identifiable {
     let updatedAt: Date
 }
 
+/// A real head-to-head duel pulled from `elo_matches` where the film you picked scores lower
+/// on TMDB than the one you passed over — grounded in an actual choice you made, not a guess
+/// at what might read as controversial.
+struct HotTake {
+    let preferred: MediaItem
+    let snubbed: MediaItem
+    let scoreGap: Double
+}
+
 // MARK: - ViewModel
 
 @Observable
@@ -52,6 +73,7 @@ final class ProfileViewModel {
     var leastLikedFilms: [MediaItem] = []
     var favoriteGenre: String?
     var favoriteGenreFilms: [MediaItem] = []
+    var hotTake: HotTake?
     var recentActivity: [ActivityEntry] = []
     var followerCount: Int = 0
     var followingCount: Int = 0
@@ -113,6 +135,12 @@ final class ProfileViewModel {
                 }
                 leastLikedFilms = leastLoaded
                 await loadFavoriteGenre(items: Array(items.prefix(20)))
+                // Hot Takes disabled — pulled to post-production (2026-08-23). Its "biggest
+                // upset" logic leans on TMDB's vote_average as the ground truth for which film
+                // is objectively worse, and that's not a data source we trust for that call.
+                // `loadHotTake`/`HotTake`/the `.hotTake` carousel case all stay in place so this
+                // is a one-line revert once there's a rating source worth building it on.
+                // await loadHotTake(userID: userID)
             }
 
             // No `tasteProfile == nil` guard — always recompute on every load so re-ranking
@@ -206,6 +234,58 @@ final class ProfileViewModel {
             .compactMap { mediaByItem[$0.id] }
     }
 
+    /// "Biggest upset" read of `elo_matches`: among your most recent duels, the one where the
+    /// film you picked has the largest TMDB-vote-average deficit against the film it beat.
+    /// Working off actual recorded picks rather than inferring from rank position is what
+    /// makes this a real hot take instead of a guess.
+    private func loadHotTake(userID: UUID) async {
+        guard let matches: [ELOMatch] = try? await SupabaseClient.shared
+            .from("elo_matches")
+            .select()
+            .eq("user_id", value: userID)
+            .order("created_at", ascending: false)
+            .limit(25)
+            .execute()
+            .value, !matches.isEmpty else {
+            hotTake = nil
+            return
+        }
+
+        struct Key: Hashable { let id: Int; let type: MediaType }
+        var keys = Set<Key>()
+        for m in matches {
+            guard let type = MediaType(rawValue: m.mediaType) else { continue }
+            keys.insert(Key(id: m.winnerTmdbID, type: type))
+            keys.insert(Key(id: m.loserTmdbID, type: type))
+        }
+
+        var mediaByKey: [Key: MediaItem] = [:]
+        await withTaskGroup(of: (Key, MediaItem?).self) { group in
+            for key in keys {
+                group.addTask {
+                    let media = try? await TMDBClient.shared.details(tmdbID: key.id, mediaType: key.type)
+                    return (key, media)
+                }
+            }
+            for await (key, media) in group {
+                if let media { mediaByKey[key] = media }
+            }
+        }
+
+        var best: HotTake?
+        for m in matches {
+            guard let type = MediaType(rawValue: m.mediaType),
+                  let preferred = mediaByKey[Key(id: m.winnerTmdbID, type: type)],
+                  let snubbed = mediaByKey[Key(id: m.loserTmdbID, type: type)],
+                  let preferredScore = preferred.voteAverage, let snubbedScore = snubbed.voteAverage else { continue }
+            let gap = snubbedScore - preferredScore
+            if gap > 0.5, (best == nil || gap > best!.scoreGap) {
+                best = HotTake(preferred: preferred, snubbed: snubbed, scoreGap: gap)
+            }
+        }
+        hotTake = best
+    }
+
     /// Weighted by ELO score, not raw frequency — a film ranked #1 pulls harder toward its
     /// genres/cast than one ranked #24, so this reflects actual favorites rather than just
     /// whatever shows up most often across 25 ranked items regardless of how they scored.
@@ -247,7 +327,11 @@ final class ProfileViewModel {
             }
         }
 
-        let topGenres = Array(genreScore.sorted { $0.value > $1.value }.prefix(3).map(\.key))
+        let topGenreEntries = Array(genreScore.sorted { $0.value > $1.value }.prefix(3))
+        let topGenreScore = topGenreEntries.first?.value ?? 0
+        let topGenres = topGenreEntries.map {
+            TasteProfile.WeightedGenre(name: $0.key, weight: topGenreScore > 0 ? $0.value / topGenreScore : 0)
+        }
         let topDirector = directorScore.values.max(by: { $0.score < $1.score })
         let topActors = actorScore.values.sorted { $0.score > $1.score }.prefix(3)
 
@@ -270,7 +354,10 @@ struct ProfileView: View {
     @State private var showPeopleSearch = false
     @State private var showEditProfile = false
     @State private var carouselPage = 0
+    @State private var isSelectingShare = false
+    @State private var selectedSharePages: Set<CarouselPage> = []
     @State private var favoritesTab: FavoritesTab = .activity
+    @State private var selectedFilm: MediaItem?
     @AppStorage("cinema_dev_fingerprint") private var devFingerprintUnlocked = false
 
     private static let memberSinceFormatter: DateFormatter = {
@@ -335,6 +422,7 @@ struct ProfileView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView(appState: appState)
         }
+        .sheet(item: $selectedFilm) { MovieInfoView(film: $0) }
         .sheet(isPresented: $showEditProfile) {
             if let user = appState.currentUser {
                 EditProfileView(user: user)
@@ -437,14 +525,16 @@ struct ProfileView: View {
         .padding(.bottom, 36)
     }
 
-    // MARK: - Film Carousel (Top Films / Least Liked / Favorite Genre)
+    // MARK: - Film Carousel (Top Films / Least Liked / Favorite Genre / Hot Takes)
 
-    private enum CarouselPage { case topFilms, leastLiked, favoriteGenre }
+    private enum CarouselPage: Hashable { case topFilms, leastLiked, favoriteGenre, hotTake }
 
     private var carouselPages: [CarouselPage] {
         var pages: [CarouselPage] = [.topFilms]
         if !vm.leastLikedFilms.isEmpty { pages.append(.leastLiked) }
         if !vm.favoriteGenreFilms.isEmpty { pages.append(.favoriteGenre) }
+        // .hotTake withheld — see the `loadHotTake` call site in ProfileViewModel.load for why.
+        // vm.hotTake is never populated right now, so this is belt-and-suspenders, not load-bearing.
         return pages
     }
 
@@ -453,22 +543,61 @@ struct ProfileView: View {
         case .topFilms: return "Top Films"
         case .leastLiked: return "Least Liked"
         case .favoriteGenre: return "Favorite Genre"
+        case .hotTake: return "Hot Takes"
         }
     }
 
-    // The share button used to float on top of the poster grid itself — moved up here,
-    // level with "Swipe for more", so it reads as a control for the carousel rather than
-    // a stamp on the posters.
-    private var currentShareContent: StoryShareContent? {
-        guard carouselPage < carouselPages.count else { return nil }
-        switch carouselPages[carouselPage] {
+    // What a given page would hand to the share sheet if selected — used both to decide
+    // whether the share button shows at all, and to build the actual list of cards once the
+    // user has picked which pages to share.
+    private func shareContent(for page: CarouselPage) -> ShareCardContent? {
+        switch page {
         case .topFilms:
-            return vm.topFilms.isEmpty ? nil : .posterGrid(films: vm.topFilms, title: "Top Films")
+            return vm.topFilms.isEmpty ? nil : .topFilms(films: vm.topFilms)
         case .leastLiked:
-            return vm.leastLikedFilms.isEmpty ? nil : .posterGrid(films: vm.leastLikedFilms, title: "Least Liked")
+            return vm.leastLikedFilms.isEmpty ? nil : .leastLiked(films: vm.leastLikedFilms)
         case .favoriteGenre:
-            return vm.favoriteGenreFilms.isEmpty ? nil : .posterGrid(films: vm.favoriteGenreFilms, title: vm.favoriteGenre ?? "Favorite Genre")
+            guard let genre = vm.favoriteGenre, !vm.favoriteGenreFilms.isEmpty else { return nil }
+            let denominator = max(min(vm.allRankedItems.count, 20), 1)
+            let percent = Int((Double(vm.favoriteGenreFilms.count) / Double(denominator)) * 100)
+            return .favoriteGenre(genre: genre, films: vm.favoriteGenreFilms, sharePercent: percent)
+        case .hotTake:
+            guard let hotTake = vm.hotTake else { return nil }
+            return .hotTake(hotTake)
         }
+    }
+
+    private var currentCarouselPage: CarouselPage {
+        carouselPages.indices.contains(carouselPage) ? carouselPages[carouselPage] : .topFilms
+    }
+
+    // MARK: Share selection (Photos-style: tap share, keep swiping, tap more pages to add)
+
+    private func beginShareSelection() {
+        selectedSharePages = [currentCarouselPage]
+        isSelectingShare = true
+    }
+
+    private func endShareSelection() {
+        isSelectingShare = false
+        selectedSharePages = []
+    }
+
+    private func toggleSelection(for page: CarouselPage) {
+        if selectedSharePages.contains(page) {
+            selectedSharePages.remove(page)
+        } else {
+            selectedSharePages.insert(page)
+        }
+    }
+
+    private func confirmShareSelection() async {
+        // Iterate `carouselPages` rather than the (unordered) Set so the share sheet gets the
+        // images in the same order they appear in the carousel.
+        let contents = carouselPages.filter { selectedSharePages.contains($0) }.compactMap { shareContent(for: $0) }
+        guard !contents.isEmpty else { return }
+        await ShareCardService.share(contents, user: appState.currentUser)
+        endShareSelection()
     }
 
     private var filmCarouselSection: some View {
@@ -492,15 +621,23 @@ struct ProfileView: View {
             .animation(.easeInOut(duration: 0.15), value: carouselPage)
 
             HStack {
-                if carouselPages.count > 1 {
-                    Text("Swipe for more")
-                        .font(.system(size: 11))
-                        .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.7))
-                }
-                Spacer()
-                if let content = currentShareContent {
-                    shareButton {
-                        Task { await StoryShareService.share(content, user: appState.currentUser) }
+                if isSelectingShare {
+                    Button("Cancel") { endShareSelection() }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(CinemaTheme.Colors.gold)
+                    Spacer()
+                    Text(selectedSharePages.isEmpty ? "Tap a page to select" : "\(selectedSharePages.count) selected")
+                        .font(.system(size: 12))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                } else {
+                    if carouselPages.count > 1 {
+                        Text("Swipe for more")
+                            .font(.system(size: 11))
+                            .foregroundStyle(CinemaTheme.Colors.textSecondary.opacity(0.7))
+                    }
+                    Spacer()
+                    if shareContent(for: currentCarouselPage) != nil {
+                        shareButton { beginShareSelection() }
                     }
                 }
             }
@@ -515,18 +652,64 @@ struct ProfileView: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             .aspectRatio(2/3, contentMode: .fit)
             .padding(.horizontal, CinemaTheme.Spacing.lg)
+            .overlay(alignment: .topTrailing) {
+                // Same spot as Photos' per-thumbnail selection circle — tap to add or remove
+                // the page currently on screen without leaving the carousel or losing your
+                // swipe position.
+                if isSelectingShare {
+                    selectionCheckmark.padding(.trailing, CinemaTheme.Spacing.lg + 10).padding(.top, 10)
+                }
+            }
             .onChange(of: carouselPages.count) { _, newCount in
                 if carouselPage >= newCount { carouselPage = 0 }
+            }
+
+            if isSelectingShare {
+                Button {
+                    Task { await confirmShareSelection() }
+                } label: {
+                    Text(selectedSharePages.isEmpty ? "Select a page to share" : "Share \(selectedSharePages.count) page\(selectedSharePages.count == 1 ? "" : "s")")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .background(CinemaTheme.Colors.gold)
+                        .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
+                }
+                .disabled(selectedSharePages.isEmpty)
+                .opacity(selectedSharePages.isEmpty ? 0.5 : 1)
+                .padding(.horizontal, CinemaTheme.Spacing.lg)
+                .padding(.top, 12)
             }
         }
         .padding(.bottom, 36)
     }
 
-    // Every page is a poster grid with an optional corner badge — Top Films badges its #1,
-    // Favorite Genre badges the genre name on the film that earned it, Least Liked has no
-    // badge. Keeping all three on one component is deliberate: the first version gave
-    // Favorite Genre a bespoke "one word floating in a dark box" layout and it read as an
-    // empty, unfinished page next to the other two real poster grids.
+    private var selectionCheckmark: some View {
+        let isSelected = selectedSharePages.contains(currentCarouselPage)
+        return Button {
+            toggleSelection(for: currentCarouselPage)
+        } label: {
+            ZStack {
+                Circle().fill(isSelected ? CinemaTheme.Colors.gold : Color.black.opacity(0.45))
+                Circle().strokeBorder(.white.opacity(isSelected ? 0 : 0.6), lineWidth: 1.5)
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.black)
+                }
+            }
+            .frame(width: 26, height: 26)
+        }
+        .accessibilityLabel(isSelected ? "Deselect page" : "Select page")
+    }
+
+    // Top Films / Least Liked / Favorite Genre share one poster-grid component with an
+    // optional corner badge — Top Films badges its #1, Favorite Genre badges the genre name
+    // on the film that earned it, Least Liked has no badge. Hot Takes breaks from the grid
+    // (see `hotTakeCard` below) since its content is a two-film comparison, not a collection —
+    // forcing that into a 9-up grid read as an empty, unfinished page the same way an early
+    // version of Favorite Genre did before it got real poster content.
     @ViewBuilder
     private func carouselCard(for page: CarouselPage) -> some View {
         switch page {
@@ -548,7 +731,50 @@ struct ProfileView: View {
                 cornerBadge: { i in i == 0 ? vm.favoriteGenre?.uppercased() : nil },
                 emptyText: "Rank a few more films to see your favorite genre."
             )
+        case .hotTake:
+            if let hotTake = vm.hotTake {
+                hotTakeCard(hotTake)
+            } else {
+                EmptyView()
+            }
         }
+    }
+
+    // Two posters + the statement, not a 9-up grid — a hot take is a comparison between two
+    // specific films, so the on-screen page shows exactly those two rather than forcing the
+    // grid layout every other page uses onto content that isn't a collection.
+    private func hotTakeCard(_ hotTake: HotTake) -> some View {
+        // Width-driven, not height-driven — same approach the poster grid pages use: give
+        // each poster an equal share of the available width and let `aspectRatio(.fit)`
+        // derive its height from that, rather than forcing a height and hoping the width
+        // works out. A `.frame(height:)` on the HStack computed as a fraction of the card's
+        // own height overflowed the card, since two full-height 2:3 posters side by side need
+        // more width than a phone-width card actually has. `.clipped()` stays on as a backstop
+        // regardless.
+        VStack(spacing: 14) {
+            HStack(spacing: 10) {
+                PosterImage(path: hotTake.preferred.posterPath, cornerRadius: CinemaTheme.Radius.md)
+                    .aspectRatio(2/3, contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+                PosterImage(path: hotTake.snubbed.posterPath, cornerRadius: CinemaTheme.Radius.md)
+                    .aspectRatio(2/3, contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+            }
+
+            Text("\(Text(hotTake.preferred.title).fontWeight(.bold)) over \(Text(hotTake.snubbed.title).fontWeight(.bold))")
+                .font(.system(size: 13))
+                .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .padding(.horizontal, 12)
+
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(CinemaTheme.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
+        .clipped()
     }
 
     private func posterGridCard(films: [MediaItem], cornerBadge: @escaping (Int) -> String?, emptyText: String) -> some View {
@@ -574,8 +800,11 @@ struct ProfileView: View {
                 ) {
                     ForEach(Array(films.prefix(9).enumerated()), id: \.element.id) { i, film in
                         ZStack(alignment: .topLeading) {
-                            PosterImage(path: film.posterPath, cornerRadius: 0)
-                                .aspectRatio(2/3, contentMode: .fit)
+                            Button { selectedFilm = film } label: {
+                                PosterImage(path: film.posterPath, cornerRadius: 0)
+                                    .aspectRatio(2/3, contentMode: .fit)
+                            }
+                            .buttonStyle(.plain)
                             if let badge = cornerBadge(i) {
                                 Text(badge)
                                     .font(.system(size: 11, weight: .black))
@@ -673,8 +902,10 @@ struct ProfileView: View {
                     .padding(.horizontal, CinemaTheme.Spacing.lg)
             } else {
                 ForEach(vm.recentActivity) { entry in
-                    ActivityPostCard(entry: entry, user: appState.currentUser)
-                        .padding(.horizontal, CinemaTheme.Spacing.lg)
+                    ActivityPostCard(entry: entry, user: appState.currentUser) {
+                        selectedFilm = entry.media
+                    }
+                    .padding(.horizontal, CinemaTheme.Spacing.lg)
                 }
             }
         }
@@ -731,59 +962,52 @@ struct ProfileView: View {
         }
     }
 
-    // Both subsections now share one visual language — caption label above, real content
-    // below, own card — instead of the old side-by-side "label column + inline chips" row
-    // that was designed for a cramped single-column section and never got wider once this
-    // moved into its own full-width tab.
+    // Genre rows and the director/cast list both run the full column top-to-bottom now —
+    // the old version put genres in a horizontal-scrolling pill row and cast in a second
+    // horizontal scroller, so on a tall narrow screen it read as two thin strips floating
+    // over a lot of empty background. Weight bars use the real ELO-normalized score from
+    // loadTasteProfile rather than a fixed 1st/2nd/3rd guess, and cast/director reuse this
+    // screen's own divided-row idiom (see SettingsRow above) instead of a bespoke card.
     private func unlockedFingerprintView(_ profile: TasteProfile) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 32) {
             if !profile.topGenres.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 14) {
                     Text("GENRES")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(CinemaTheme.Colors.textSecondary)
                         .padding(.horizontal, CinemaTheme.Spacing.lg)
 
-                    HStack(spacing: 10) {
-                        ForEach(Array(profile.topGenres.enumerated()), id: \.element) { i, genre in
-                            HStack(spacing: 6) {
-                                Text("#\(i + 1)")
-                                    .font(.system(size: 12, weight: .black))
-                                    .foregroundStyle(CinemaTheme.Colors.gold)
-                                Text(genre)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(CinemaTheme.Colors.surface)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
+                    VStack(spacing: 14) {
+                        ForEach(Array(profile.topGenres.enumerated()), id: \.element.id) { i, genre in
+                            GenreWeightRow(rank: i + 1, genre: genre)
                         }
-                        Spacer(minLength: 0)
                     }
                     .padding(.horizontal, CinemaTheme.Spacing.lg)
                 }
             }
 
             if profile.favoriteDirector != nil || !profile.favoriteActors.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 14) {
                     Text("DIRECTOR & CAST")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(CinemaTheme.Colors.textSecondary)
                         .padding(.horizontal, CinemaTheme.Spacing.lg)
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 20) {
-                            if let director = profile.favoriteDirector {
-                                PersonAvatarCard(person: director, roleLabel: "Director", size: 84)
-                            }
-                            ForEach(profile.favoriteActors) { actor in
-                                PersonAvatarCard(person: actor, roleLabel: nil, size: 84)
+                    VStack(spacing: 0) {
+                        if let director = profile.favoriteDirector {
+                            PersonFingerprintRow(person: director, roleLabel: "Director")
+                            if !profile.favoriteActors.isEmpty {
+                                Divider().background(CinemaTheme.Colors.border).padding(.leading, 74)
                             }
                         }
-                        .padding(.horizontal, CinemaTheme.Spacing.lg)
+                        ForEach(Array(profile.favoriteActors.enumerated()), id: \.element.id) { i, actor in
+                            PersonFingerprintRow(person: actor, roleLabel: nil)
+                            if i < profile.favoriteActors.count - 1 {
+                                Divider().background(CinemaTheme.Colors.border).padding(.leading, 74)
+                            }
+                        }
                     }
+                    .padding(.horizontal, CinemaTheme.Spacing.lg)
                 }
             }
         }
@@ -791,15 +1015,52 @@ struct ProfileView: View {
 
 }
 
-// MARK: - Person Avatar Card (Director & Cast — same treatment as MovieInfoView's Cast & Crew)
+// MARK: - Genre Weight Row (Taste Profile)
 
-private struct PersonAvatarCard: View {
-    let person: TasteProfile.WeightedPerson
-    var roleLabel: String? = nil
-    var size: CGFloat = 72
+private struct GenreWeightRow: View {
+    let rank: Int
+    let genre: TasteProfile.WeightedGenre
+
+    private var rankColor: Color {
+        switch rank {
+        case 1: return CinemaTheme.Colors.gold
+        case 2: return CinemaTheme.Colors.gold.opacity(0.65)
+        default: return CinemaTheme.Colors.gold.opacity(0.4)
+        }
+    }
 
     var body: some View {
-        VStack(spacing: 8) {
+        HStack(spacing: 12) {
+            Text("\(rank)")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(rankColor)
+                .frame(width: 14, alignment: .leading)
+
+            Text(genre.name)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                .frame(width: 74, alignment: .leading)
+                .lineLimit(1)
+
+            GeometryReader { geo in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(rankColor)
+                    .frame(width: geo.size.width * max(0.08, min(1, genre.weight)), height: 4)
+                    .frame(maxHeight: .infinity, alignment: .center)
+            }
+            .frame(height: 4)
+        }
+    }
+}
+
+// MARK: - Person Fingerprint Row (Director & Cast — a divided row list, not a card)
+
+private struct PersonFingerprintRow: View {
+    let person: TasteProfile.WeightedPerson
+    var roleLabel: String? = nil
+
+    var body: some View {
+        HStack(spacing: 14) {
             Group {
                 if let path = person.profilePath, let url = TMDBClient.shared.profileImageURL(path: path) {
                     AsyncImage(url: url) { phase in
@@ -808,23 +1069,30 @@ private struct PersonAvatarCard: View {
                     }
                 } else { placeholder }
             }
-            .frame(width: size, height: size).clipShape(Circle())
+            .frame(width: 44, height: 44)
+            .clipShape(Circle())
             .overlay(Circle().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
 
-            VStack(spacing: 2) {
-                Text(person.name).font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(CinemaTheme.Colors.textPrimary).lineLimit(2).multilineTextAlignment(.center)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(person.name)
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                    .lineLimit(1)
                 if let roleLabel {
-                    Text(roleLabel).font(.system(size: 11)).foregroundStyle(CinemaTheme.Colors.textSecondary).lineLimit(1)
+                    Text(roleLabel)
+                        .font(.system(size: 12))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
                 }
             }
-            .frame(width: 80)
+
+            Spacer(minLength: 0)
         }
+        .padding(.vertical, 10)
     }
 
     private var placeholder: some View {
         CinemaTheme.Colors.surface.overlay(
-            Image(systemName: "person.fill").font(.system(size: 28)).foregroundStyle(CinemaTheme.Colors.border)
+            Image(systemName: "person.fill").font(.system(size: 16)).foregroundStyle(CinemaTheme.Colors.border)
         )
     }
 }
@@ -840,6 +1108,7 @@ struct SettingsView: View {
     @State private var showDeleteConfirm = false
     @State private var isDeletingAccount = false
     @State private var deleteErrorMessage: String?
+    @State private var showCaptionDebug = false
 
     var body: some View {
         NavigationStack {
@@ -925,6 +1194,39 @@ struct SettingsView: View {
                                 }
                                 .padding(.horizontal, CinemaTheme.Spacing.lg)
                                 .padding(.vertical, 12)
+
+                                Divider().background(CinemaTheme.Colors.border).padding(.leading, 60)
+
+                                // Jumps straight to RankingView's "ranked!" / caption screen with
+                                // mock data — for hand-testing that specific screen (keyboard
+                                // behavior, layout) without spending a real ranking on every check.
+                                Button { showCaptionDebug = true } label: {
+                                    HStack(spacing: 14) {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 7)
+                                                .fill(Color.purple)
+                                                .frame(width: 32, height: 32)
+                                            Image(systemName: "text.bubble.fill")
+                                                .font(.system(size: 15, weight: .medium))
+                                                .foregroundStyle(.white)
+                                        }
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Caption Screen Preview")
+                                                .font(.system(size: 16))
+                                                .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                                            Text("Jumps to the ranked/caption screen with mock data")
+                                                .font(.system(size: 12))
+                                                .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundStyle(CinemaTheme.Colors.textSecondary)
+                                    }
+                                    .padding(.horizontal, CinemaTheme.Spacing.lg)
+                                    .padding(.vertical, 12)
+                                }
+                                .buttonStyle(.plain)
                             }
                             .background(CinemaTheme.Colors.surface)
                             .clipShape(RoundedRectangle(cornerRadius: CinemaTheme.Radius.md))
@@ -1003,6 +1305,9 @@ struct SettingsView: View {
                 if let user = appState.currentUser {
                     EditProfileView(user: user)
                 }
+            }
+            .sheet(isPresented: $showCaptionDebug) {
+                RankingResultDebugPreview()
             }
             .confirmationDialog(
                 "Delete your account?",
@@ -1118,6 +1423,7 @@ private struct SettingsRow: View {
 private struct ActivityPostCard: View {
     let entry: ActivityEntry
     let user: CinemaUser?
+    let onPosterTap: () -> Void
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -1127,8 +1433,11 @@ private struct ActivityPostCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            PosterImage(path: entry.media.posterPath, cornerRadius: 12)
-                .frame(width: 84, height: 126)
+            Button(action: onPosterTap) {
+                PosterImage(path: entry.media.posterPath, cornerRadius: 12)
+                    .frame(width: 84, height: 126)
+            }
+            .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
@@ -1362,6 +1671,7 @@ struct UserProfileView: View {
     let user: CinemaUser
     @State private var vm = UserProfileViewModel()
     @State private var showShareCard = false
+    @State private var selectedFilm: MediaItem?
 
     var body: some View {
         ZStack {
@@ -1441,8 +1751,11 @@ struct UserProfileView: View {
                                 ) {
                                     ForEach(Array(vm.topFilms.prefix(9).enumerated()), id: \.element.id) { i, film in
                                         ZStack(alignment: .topLeading) {
-                                            PosterImage(path: film.posterPath, cornerRadius: 0)
-                                                .aspectRatio(2/3, contentMode: .fit)
+                                            Button { selectedFilm = film } label: {
+                                                PosterImage(path: film.posterPath, cornerRadius: 0)
+                                                    .aspectRatio(2/3, contentMode: .fit)
+                                            }
+                                            .buttonStyle(.plain)
                                             if i == 0 {
                                                 Text("#1")
                                                     .font(.system(size: 11, weight: .black))
@@ -1471,6 +1784,7 @@ struct UserProfileView: View {
         .sheet(isPresented: $showShareCard) {
             ShareCardView(films: vm.topFilms, user: user)
         }
+        .sheet(item: $selectedFilm) { MovieInfoView(film: $0) }
     }
 }
 

@@ -63,6 +63,11 @@ final class RankingViewModel {
     var opponent: MediaItem?
     var overallPosition = 1
     var flavorText = ""
+    var captionDraft = ""
+    // Only set once `finish()` has written the (non-private) feed_events row for
+    // this ranking — postCaption attaches to that specific row rather than
+    // guessing at one by tmdb_id, since a private ranking has no row to attach to.
+    private var feedEventID: UUID?
 
     var friends: [CinemaUser] = []
     var selectedFriendIDs: Set<UUID> = []
@@ -271,7 +276,48 @@ final class RankingViewModel {
             flavorText = ""
         }
 
+        // Every completed ranking is a "pop" — except a private one, which by
+        // definition shouldn't post to anyone's feed. feed_events is
+        // insert-only (never upserted), so unlike ranked_items it isn't at risk
+        // of a later partial upsert silently wiping this row's fields.
+        if let userID, !isPrivate {
+            let newID = UUID()
+            do {
+                try await SupabaseClient.shared.from("feed_events").insert([
+                    "id": newID.uuidString,
+                    "user_id": userID.uuidString,
+                    "event_type": "ranked",
+                    "tmdb_id": String(film.id),
+                    "media_type": film.mediaType.rawValue,
+                    "elo_score": String(filmElo),
+                    "rank_position": String(overallPosition),
+                ]).execute()
+                feedEventID = newID
+            } catch {
+                Log.ranking.error("Feed event insert failed: \(String(describing: error), privacy: .public)")
+            }
+        }
+
         stage = .ranked
+    }
+
+    // Attaches the caption the user wrote on the result screen to the pop
+    // `finish()` already created. A no-op if they left it blank, or if the
+    // ranking was private (no feedEventID exists to attach to).
+    func postCaption() async {
+        // Re-enforced here, not just in the TextField's onChange — belt and
+        // suspenders against anything that reaches this without going
+        // through that UI (paste races, a future second entry point, etc).
+        let trimmed = String(captionDraft.trimmingCharacters(in: .whitespacesAndNewlines).prefix(100))
+        guard let feedEventID, !trimmed.isEmpty else { return }
+        do {
+            try await SupabaseClient.shared.from("feed_events")
+                .update(["caption": trimmed])
+                .eq("id", value: feedEventID)
+                .execute()
+        } catch {
+            Log.ranking.error("Caption post failed: \(String(describing: error), privacy: .public)")
+        }
     }
 }
 
@@ -342,8 +388,10 @@ struct RankingView: View {
                     }
                 case .ranked:
                     RankedResultView(
-                        film: film, position: vm.overallPosition, flavorText: vm.flavorText
+                        film: film, position: vm.overallPosition, flavorText: vm.flavorText,
+                        caption: Binding(get: { vm.captionDraft }, set: { vm.captionDraft = $0 })
                     ) {
+                        Task { await vm.postCaption() }
                         dismiss()
                         onFinished?()
                     }
@@ -353,7 +401,12 @@ struct RankingView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(CinemaTheme.Colors.background)
-        .ignoresSafeArea(edges: .bottom)
+        // Scoped to .container (not the default .all) so this still extends
+        // the background under the home indicator like before, but no
+        // longer also ignores the *keyboard's* safe-area contribution — the
+        // unscoped version was why the "Add a caption" field's keyboard
+        // just covered the field instead of the sheet making room for it.
+        .ignoresSafeArea(.container, edges: .bottom)
         .presentationDetents([.height(380), .height(600), .large], selection: $selectedDetent)
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(24)
@@ -370,7 +423,13 @@ struct RankingView: View {
 
     private func detent(for stage: RankingViewModel.Stage) -> PresentationDetent {
         switch stage {
-        case .rate, .ranked: .height(380)
+        case .rate: .height(380)
+        // .large, not a fixed height like the other short stages — this is
+        // the one stage with a keyboard-summoning text field, and a small
+        // fixed-height sheet leaves too little headroom above the keyboard
+        // once it's up. Full height guarantees room regardless of keyboard
+        // size across devices.
+        case .ranked: .large
         case .details: .height(600)
         case .loadingOpponent, .compare: .large
         }
@@ -820,16 +879,24 @@ private struct RankedResultView: View {
     let film: MediaItem
     let position: Int
     let flavorText: String
+    @Binding var caption: String
     let onDone: () -> Void
+
+    // A sentence or two — long enough for a real reaction, short enough that
+    // it can't turn into a review. Anyone with more to say has the comment
+    // thread on the pop itself for that.
+    private let captionCharLimit = 100
+
+    @FocusState private var captionFocused: Bool
 
     var body: some View {
         VStack(spacing: 16) {
-            Spacer()
+            Spacer(minLength: 8)
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 44))
+                .font(.system(size: 40))
                 .foregroundStyle(CinemaTheme.Colors.gold)
             Text("\(film.title) ranked!")
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
@@ -843,9 +910,59 @@ private struct RankedResultView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 24)
             }
-            Spacer()
+
+            // Optional — this is what actually shows on friends' Feed cards
+            // instead of an auto-generated "popped [Movie]" line. Skippable:
+            // leaving it blank just falls back to that auto caption.
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Add a caption")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .textCase(.uppercase)
+                    Spacer()
+                    // A sentence or two, not a review — anything longer belongs
+                    // in a comment instead, where there's actually room for it.
+                    Text("\(caption.count)/\(captionCharLimit)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(caption.isEmpty ? 0.3 : 0.5))
+                }
+                TextField("What'd you think?", text: $caption, axis: .vertical)
+                    .focused($captionFocused)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.white)
+                    .lineLimit(2...4)
+                    .padding(12)
+                    .background(Color.white.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
+                    .submitLabel(.done)
+                    .onSubmit { captionFocused = false }
+                    .onChange(of: caption) { _, newValue in
+                        if newValue.count > captionCharLimit {
+                            caption = String(newValue.prefix(captionCharLimit))
+                        }
+                    }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 4)
+            // A multi-line (axis: .vertical) field's return key is for
+            // inserting a line break, not submitting — onSubmit above is a
+            // nice-to-have if it fires, not something to depend on. This
+            // toolbar button is the one guaranteed, obvious way to finish
+            // typing and get the keyboard out of the way, independent of
+            // whatever the return key does.
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { captionFocused = false }
+                        .foregroundStyle(CinemaTheme.Colors.gold)
+                }
+            }
+
+            Spacer(minLength: 8)
             Button(action: onDone) {
-                Text("Done")
+                Text(caption.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Done" : "Post")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(CinemaTheme.Colors.background)
                     .frame(maxWidth: .infinity)
@@ -856,5 +973,49 @@ private struct RankedResultView: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 20)
         }
+    }
+}
+
+// MARK: - Debug: jump straight to the "ranked" result/caption screen
+//
+// Reached from Profile → Settings → Developer → "Caption Screen Preview" —
+// lets this exact screen (the one with the keyboard-avoidance bug reported
+// 2026-08-20) get hand-tested standalone, without spending a real ranking
+// (and its Supabase writes) on every check. Not gated behind #if DEBUG:
+// this app has no Release/TestFlight build yet, everything running right
+// now is pre-production, and the "Developer" section it lives in already
+// says so — same reasoning as devFingerprintUnlocked/devScoresUnlocked
+// next to it in SettingsView.
+struct RankingResultDebugPreview: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var caption = ""
+
+    private var mockFilm: MediaItem {
+        MediaItem(
+            id: 1, mediaType: .movie,
+            title: "Everything Everywhere All at Once",
+            overview: "", posterPath: "/w3LxiVYdWWRvEVdn5RYq6jIqkb1.jpg", backdropPath: nil,
+            releaseYear: "2022", voteAverage: 7.8, genreNames: ["Action", "Adventure"]
+        )
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SheetHeaderRow(film: mockFilm) { dismiss() }
+            RankedResultView(
+                film: mockFilm, position: 3,
+                flavorText: "Beat The Dark Knight in your rankings.",
+                caption: $caption
+            ) {
+                dismiss()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(CinemaTheme.Colors.background)
+        .ignoresSafeArea(.container, edges: .bottom)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(24)
+        .presentationBackground(CinemaTheme.Colors.background)
     }
 }
