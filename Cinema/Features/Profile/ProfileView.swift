@@ -357,6 +357,7 @@ struct ProfileView: View {
     @State private var isSelectingShare = false
     @State private var selectedSharePages: Set<CarouselPage> = []
     @State private var favoritesTab: FavoritesTab = .activity
+    @State private var selectedFilm: MediaItem?
     @AppStorage("cinema_dev_fingerprint") private var devFingerprintUnlocked = false
 
     private static let memberSinceFormatter: DateFormatter = {
@@ -421,6 +422,7 @@ struct ProfileView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView(appState: appState)
         }
+        .sheet(item: $selectedFilm) { MovieInfoView(film: $0) }
         .sheet(isPresented: $showEditProfile) {
             if let user = appState.currentUser {
                 EditProfileView(user: user)
@@ -798,8 +800,11 @@ struct ProfileView: View {
                 ) {
                     ForEach(Array(films.prefix(9).enumerated()), id: \.element.id) { i, film in
                         ZStack(alignment: .topLeading) {
-                            PosterImage(path: film.posterPath, cornerRadius: 0)
-                                .aspectRatio(2/3, contentMode: .fit)
+                            Button { selectedFilm = film } label: {
+                                PosterImage(path: film.posterPath, cornerRadius: 0)
+                                    .aspectRatio(2/3, contentMode: .fit)
+                            }
+                            .buttonStyle(.plain)
                             if let badge = cornerBadge(i) {
                                 Text(badge)
                                     .font(.system(size: 11, weight: .black))
@@ -897,8 +902,10 @@ struct ProfileView: View {
                     .padding(.horizontal, CinemaTheme.Spacing.lg)
             } else {
                 ForEach(vm.recentActivity) { entry in
-                    ActivityPostCard(entry: entry, user: appState.currentUser)
-                        .padding(.horizontal, CinemaTheme.Spacing.lg)
+                    ActivityPostCard(entry: entry, user: appState.currentUser) {
+                        selectedFilm = entry.media
+                    }
+                    .padding(.horizontal, CinemaTheme.Spacing.lg)
                 }
             }
         }
@@ -1416,6 +1423,7 @@ private struct SettingsRow: View {
 private struct ActivityPostCard: View {
     let entry: ActivityEntry
     let user: CinemaUser?
+    let onPosterTap: () -> Void
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -1425,8 +1433,11 @@ private struct ActivityPostCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            PosterImage(path: entry.media.posterPath, cornerRadius: 12)
-                .frame(width: 84, height: 126)
+            Button(action: onPosterTap) {
+                PosterImage(path: entry.media.posterPath, cornerRadius: 12)
+                    .frame(width: 84, height: 126)
+            }
+            .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
@@ -1660,6 +1671,7 @@ struct UserProfileView: View {
     let user: CinemaUser
     @State private var vm = UserProfileViewModel()
     @State private var showShareCard = false
+    @State private var selectedFilm: MediaItem?
 
     var body: some View {
         ZStack {
@@ -1739,8 +1751,11 @@ struct UserProfileView: View {
                                 ) {
                                     ForEach(Array(vm.topFilms.prefix(9).enumerated()), id: \.element.id) { i, film in
                                         ZStack(alignment: .topLeading) {
-                                            PosterImage(path: film.posterPath, cornerRadius: 0)
-                                                .aspectRatio(2/3, contentMode: .fit)
+                                            Button { selectedFilm = film } label: {
+                                                PosterImage(path: film.posterPath, cornerRadius: 0)
+                                                    .aspectRatio(2/3, contentMode: .fit)
+                                            }
+                                            .buttonStyle(.plain)
                                             if i == 0 {
                                                 Text("#1")
                                                     .font(.system(size: 11, weight: .black))
@@ -1769,6 +1784,7 @@ struct UserProfileView: View {
         .sheet(isPresented: $showShareCard) {
             ShareCardView(films: vm.topFilms, user: user)
         }
+        .sheet(item: $selectedFilm) { MovieInfoView(film: $0) }
     }
 }
 
