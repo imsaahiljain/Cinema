@@ -215,6 +215,16 @@ private struct Top10Card: View {
                         digit("0").frame(width: 48, alignment: .center)
                     }
                     .offset(y: 12)
+                } else if index == 0 {
+                    // Rank #1 sits at the very start of the row, right against the
+                    // section's own left margin. Centering the digit (like 2-9) leaves
+                    // dead space before its ink, so it doesn't actually line up with the
+                    // "Discover" / "Top 10 Right Now" text above it. Left-align just this
+                    // one so the number's own left edge — not empty frame space — is
+                    // what sits flush with the margin.
+                    digit("\(index + 1)")
+                        .frame(width: 72, alignment: .leading)
+                        .offset(y: 12)
                 } else {
                     digit("\(index + 1)")
                         .frame(width: 72, alignment: .center)
