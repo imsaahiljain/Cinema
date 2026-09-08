@@ -3,11 +3,13 @@ import Supabase
 
 // MARK: - ListsView — "Rankings": Watched / Watchlist / user-created lists
 //
-// Built from the "Popcorn Rankings" design handoff (warm cream + brick-red
-// accent, same design language as FeedMarqueeView — see WarmTheme.swift).
-// No big title/subtitle per feedback — the tab switcher carries context on
-// its own, matching how Beli's "Your Lists" screen leans on plain tabs
-// rather than a headline (see Docs/beli-design-notes.md).
+// Restyled 2026-09-07 onto CinemaTheme (dark/gold) to match Search and
+// Discover — was originally built from the "Popcorn Rankings" warm-palette
+// design handoff (cream + brick-red, WarmTheme.swift); functionality is
+// unchanged, only colors/fonts moved. No big title/subtitle per feedback —
+// the tab switcher carries context on its own, matching how Beli's "Your
+// Lists" screen leans on plain tabs rather than a headline (see
+// Docs/beli-design-notes.md).
 //
 // Watched, Watchlist, and custom lists are all real Supabase data
 // (ranked_items / watchlist / custom_lists+list_items — see Docs/schema.sql).
@@ -216,10 +218,16 @@ struct ListsView: View {
 
     var body: some View {
         ZStack {
-            WarmTheme.background.ignoresSafeArea()
+            CinemaTheme.Colors.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                ScreenTitle("My Lists")
+                Text("My Lists")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
+                    .padding(.bottom, 12)
                 tabSwitcher
 
                 switch selection {
@@ -234,8 +242,8 @@ struct ListsView: View {
                 }
             }
 
-            // Same reasoning as MovieInfoView — this page's cream background is
-            // even brighter than the system's own sheet dimming can mask on its own.
+            // Same reasoning as MovieInfoView — bright poster art behind a sheet's
+            // small height detent isn't dark enough with the system's own dimming alone.
             if rankingFilm != nil || selectedFilm != nil {
                 Color.black.opacity(0.82).ignoresSafeArea()
             }
@@ -318,10 +326,10 @@ struct ListsView: View {
         HStack(spacing: 10) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    pill("Watched", isSelected: selection == .watched) { selection = .watched }
-                    pill("Watchlist", isSelected: selection == .watchlist) { selection = .watchlist }
+                    GenreChip(name: "Watched", isSelected: selection == .watched) { selection = .watched }
+                    GenreChip(name: "Watchlist", isSelected: selection == .watchlist) { selection = .watchlist }
                     ForEach(vm.customLists) { list in
-                        pill(list.name, isSelected: selection == .custom(list.id)) {
+                        GenreChip(name: list.name, isSelected: selection == .custom(list.id)) {
                             selection = .custom(list.id)
                             Task { await vm.loadItems(for: list) }
                         }
@@ -345,10 +353,11 @@ struct ListsView: View {
                 } label: {
                     Image(systemName: isReordering ? "checkmark" : "line.3.horizontal")
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(isReordering ? .white : WarmTheme.titleText)
+                        .foregroundStyle(isReordering ? .black : CinemaTheme.Colors.textPrimary)
                         .frame(width: 36, height: 36)
-                        .background(isReordering ? WarmTheme.accent : WarmTheme.chipBackground)
+                        .background(isReordering ? CinemaTheme.Colors.gold : CinemaTheme.Colors.surface)
                         .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(isReordering ? CinemaTheme.Colors.gold : CinemaTheme.Colors.border, lineWidth: 1))
                 }
                 .accessibilityLabel(isReordering ? "Done Reordering" : "Reorder Rankings")
                 .padding(.trailing, 8)
@@ -359,28 +368,16 @@ struct ListsView: View {
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(WarmTheme.titleText)
+                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
                     .frame(width: 36, height: 36)
-                    .background(WarmTheme.chipBackground)
+                    .background(CinemaTheme.Colors.surface)
                     .clipShape(Circle())
+                    .overlay(Circle().strokeBorder(CinemaTheme.Colors.border, lineWidth: 1))
             }
             .accessibilityLabel("Create List")
             .padding(.trailing, 20)
         }
         .padding(.bottom, 14)
-    }
-
-    private func pill(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(WarmTheme.Font.bodyBold(14))
-                .foregroundStyle(isSelected ? .white : WarmTheme.nameText)
-                .lineLimit(1)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 9)
-                .background(isSelected ? WarmTheme.accent : WarmTheme.chipBackground)
-                .clipShape(Capsule())
-        }
     }
 
     // MARK: Watched Content
@@ -404,21 +401,20 @@ struct ListsView: View {
                     PosterRow(
                         rank: index + 1,
                         media: vm.films[item.tmdbID],
-                        tmdbID: item.tmdbID,
                         onPosterTap: { selectedFilm = vm.films[item.tmdbID] }
                     ) {
                         if unlocked {
                             Text(String(format: "%.1f", ratingOutOf10(rankPosition: index + 1, totalRanked: vm.rankedItems.count)))
-                                .font(WarmTheme.Font.bodyBold(13))
-                                .foregroundStyle(.white)
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(.black)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
-                                .background(WarmTheme.accent, in: RoundedRectangle(cornerRadius: 8))
+                                .background(CinemaTheme.Colors.gold, in: RoundedRectangle(cornerRadius: 8))
                         }
                     }
                     .overlay(alignment: .bottom) {
                         if index != vm.rankedItems.count - 1 {
-                            Rectangle().fill(WarmTheme.divider).frame(height: 1).padding(.leading, 20)
+                            Rectangle().fill(CinemaTheme.Colors.border).frame(height: 1).padding(.leading, 20)
                         }
                     }
                     .listRowInsets(EdgeInsets())
@@ -454,7 +450,6 @@ struct ListsView: View {
                         PosterRow(
                             rank: nil,
                             media: vm.films[entry.tmdbID],
-                            tmdbID: entry.tmdbID,
                             onPosterTap: { selectedFilm = vm.films[entry.tmdbID] }
                         ) {
                             RankItButton {
@@ -494,7 +489,6 @@ struct ListsView: View {
                         PosterRow(
                             rank: nil,
                             media: vm.films[item.tmdbID],
-                            tmdbID: item.tmdbID,
                             onPosterTap: { selectedFilm = vm.films[item.tmdbID] }
                         ) {
                             RankItButton {
@@ -519,7 +513,7 @@ struct ListsView: View {
     private var loadingSpacer: some View {
         VStack {
             Spacer()
-            ProgressView().tint(WarmTheme.accent)
+            ProgressView().tint(CinemaTheme.Colors.gold)
             Spacer()
         }
     }
@@ -528,7 +522,7 @@ struct ListsView: View {
         Group {
             if !isLast {
                 Rectangle()
-                    .fill(WarmTheme.divider)
+                    .fill(CinemaTheme.Colors.border)
                     .frame(height: 1)
                     .padding(.leading, 20)
             }
@@ -545,15 +539,15 @@ private struct ScoresLockedHint: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Rank \(threshold - rankedCount) more film\(threshold - rankedCount == 1 ? "" : "s") to reveal scores.")
-                .font(WarmTheme.Font.body(13))
-                .foregroundStyle(WarmTheme.secondaryText)
+                .font(.system(size: 13))
+                .foregroundStyle(CinemaTheme.Colors.textSecondary)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(WarmTheme.chipBackground)
+                        .fill(CinemaTheme.Colors.surface)
                         .frame(height: 3)
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(WarmTheme.accent)
+                        .fill(CinemaTheme.Colors.gold)
                         .frame(width: geo.size.width * min(CGFloat(rankedCount) / CGFloat(threshold), 1.0), height: 3)
                 }
             }
@@ -572,11 +566,11 @@ private struct RankItButton: View {
     var body: some View {
         Button(action: action) {
             Text("Rank it")
-                .font(WarmTheme.Font.bodyBold(12))
-                .foregroundStyle(WarmTheme.accent)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(CinemaTheme.Colors.gold)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
-                .overlay(Capsule().strokeBorder(WarmTheme.accent, lineWidth: 1.5))
+                .overlay(Capsule().strokeBorder(CinemaTheme.Colors.gold, lineWidth: 1.5))
         }
     }
 }
@@ -586,40 +580,38 @@ private struct RankItButton: View {
 private struct PosterRow<Trailing: View>: View {
     let rank: Int?
     let media: MediaItem?
-    let tmdbID: Int
     let onPosterTap: () -> Void
     @ViewBuilder let trailing: () -> Trailing
 
     private var rankColor: Color {
-        guard let rank else { return WarmTheme.titleText }
-        return rank <= 3 ? WarmTheme.accent : WarmTheme.titleText
+        guard let rank else { return CinemaTheme.Colors.textPrimary }
+        return rank <= 3 ? CinemaTheme.Colors.gold : CinemaTheme.Colors.textPrimary
     }
 
     var body: some View {
         HStack(spacing: 14) {
             if let rank {
                 Text("\(rank)")
-                    .font(rank <= 3 ? WarmTheme.Font.wordmarkBold(22) : WarmTheme.Font.wordmark(18))
+                    .font(.system(size: rank <= 3 ? 22 : 18, weight: .bold))
                     .foregroundStyle(rankColor)
                     .frame(width: 30, alignment: .center)
             }
 
             Button(action: onPosterTap) {
-                poster
+                PosterImage(path: media?.posterPath, cornerRadius: 8)
                     .frame(width: 56, height: 84)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(media?.title ?? "Loading\u{2026}")
-                    .font(WarmTheme.Font.wordmark(17))
-                    .foregroundStyle(WarmTheme.titleText)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
                     .lineLimit(1)
                 if let year = media?.releaseYear {
                     Text(year)
-                        .font(WarmTheme.Font.body(13))
-                        .foregroundStyle(WarmTheme.secondaryText)
+                        .font(.system(size: 13))
+                        .foregroundStyle(CinemaTheme.Colors.textSecondary)
                 }
             }
 
@@ -629,27 +621,6 @@ private struct PosterRow<Trailing: View>: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
-    }
-
-    @ViewBuilder
-    private var poster: some View {
-        if let path = media?.posterPath, let url = TMDBClient.shared.posterURL(path: path) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fill)
-                default:
-                    placeholder
-                }
-            }
-        } else {
-            placeholder
-        }
-    }
-
-    private var placeholder: some View {
-        let colors = PosterPlaceholder.colors(seed: tmdbID)
-        return PosterPlaceholder(dark: colors.dark, darker: colors.darker)
     }
 }
 
@@ -662,8 +633,8 @@ private struct EmptyStateView: View {
         VStack(spacing: 10) {
             Spacer()
             Text(message)
-                .font(WarmTheme.Font.body(15))
-                .foregroundStyle(WarmTheme.secondaryText)
+                .font(.system(size: 15))
+                .foregroundStyle(CinemaTheme.Colors.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             Spacer()
@@ -684,23 +655,23 @@ struct CreateListSheet: View {
 
     var body: some View {
         ZStack {
-            WarmTheme.background.ignoresSafeArea()
+            CinemaTheme.Colors.background.ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 20) {
                 Text("Name your list")
-                    .font(WarmTheme.Font.wordmarkBold(24))
-                    .foregroundStyle(WarmTheme.titleText)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(CinemaTheme.Colors.textPrimary)
                     .padding(.top, 28)
 
                 VStack(spacing: 0) {
                     TextField("Funny Movies", text: $name)
-                        .font(WarmTheme.Font.body(18))
-                        .foregroundStyle(WarmTheme.titleText)
-                        .tint(WarmTheme.accent)
+                        .font(.system(size: 18))
+                        .foregroundStyle(CinemaTheme.Colors.textPrimary)
+                        .tint(CinemaTheme.Colors.gold)
                         .focused($focused)
                         .padding(.bottom, 10)
                     Rectangle()
-                        .fill(name.isEmpty ? WarmTheme.divider : WarmTheme.accent)
+                        .fill(name.isEmpty ? CinemaTheme.Colors.border : CinemaTheme.Colors.gold)
                         .frame(height: 1.5)
                 }
 
@@ -716,16 +687,16 @@ struct CreateListSheet: View {
                 } label: {
                     ZStack {
                         if isSaving {
-                            ProgressView().tint(.white)
+                            ProgressView().tint(.black)
                         } else {
                             Text("Create")
-                                .font(WarmTheme.Font.bodyBold(16))
-                                .foregroundStyle(.white)
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(.black)
                         }
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
-                    .background(name.trimmingCharacters(in: .whitespaces).isEmpty ? WarmTheme.accent.opacity(0.4) : WarmTheme.accent)
+                    .background(name.trimmingCharacters(in: .whitespaces).isEmpty ? CinemaTheme.Colors.gold.opacity(0.4) : CinemaTheme.Colors.gold)
                     .clipShape(Capsule())
                 }
                 .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
