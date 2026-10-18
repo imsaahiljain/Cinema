@@ -88,6 +88,8 @@ final class RankingViewModel {
     private var filmElo: Double = 1500
     private var bucketItems: [RankedItem] = []
     private var opponentItem: RankedItem?
+    private var pendingDuel: (id: UUID, filmWon: Bool)?
+    var duelError: String?
 
     init(film: MediaItem) {
         self.film = film
@@ -195,8 +197,6 @@ final class RankingViewModel {
     // filmWon: true if the film being ranked won this comparison
     func choose(filmWon: Bool, userID: UUID?) async {
         guard let userID, let oppItem = opponentItem else { return }
-        pickTick += 1
-        comparisonCount += 1
 
         let newFilmElo: Double
         let newOppElo: Double
@@ -205,26 +205,46 @@ final class RankingViewModel {
         } else {
             (newOppElo, newFilmElo) = ELOService.newRatings(winnerRating: oppItem.eloScore, loserRating: filmElo)
         }
-        filmElo = newFilmElo
+
+        // Reused across retries of the same pick so a request that actually landed
+        // but whose response was lost can't be applied a second time.
+        let matchID: UUID
+        if let pending = pendingDuel, pending.filmWon == filmWon {
+            matchID = pending.id
+        } else {
+            matchID = UUID()
+            pendingDuel = (matchID, filmWon)
+        }
+
+        struct DuelParams: Encodable {
+            let p_match_id: String
+            let p_film_tmdb_id: Int
+            let p_opp_tmdb_id: Int
+            let p_media_type: String
+            let p_film_won: Bool
+            let p_film_elo_before: Double
+            let p_opp_elo_before: Double
+            let p_film_elo_after: Double
+            let p_opp_elo_after: Double
+        }
 
         do {
-            try await SupabaseClient.shared.from("ranked_items").upsert([
-                "user_id": userID.uuidString, "tmdb_id": String(film.id),
-                "media_type": film.mediaType.rawValue, "elo_score": String(filmElo),
-            ], onConflict: "user_id,tmdb_id,media_type").execute()
-            try await SupabaseClient.shared.from("ranked_items").upsert([
-                "user_id": userID.uuidString, "tmdb_id": String(oppItem.tmdbID),
-                "media_type": oppItem.mediaType.rawValue, "elo_score": String(newOppElo),
-            ], onConflict: "user_id,tmdb_id,media_type").execute()
-            try await SupabaseClient.shared.from("elo_matches").insert([
-                "user_id": userID.uuidString,
-                "winner_tmdb_id": String(filmWon ? film.id : oppItem.tmdbID),
-                "loser_tmdb_id": String(filmWon ? oppItem.tmdbID : film.id),
-                "media_type": film.mediaType.rawValue,
-            ]).execute()
+            try await SupabaseClient.shared.rpc("record_duel", params: DuelParams(
+                p_match_id: matchID.uuidString, p_film_tmdb_id: film.id, p_opp_tmdb_id: oppItem.tmdbID,
+                p_media_type: film.mediaType.rawValue, p_film_won: filmWon,
+                p_film_elo_before: filmElo, p_opp_elo_before: oppItem.eloScore,
+                p_film_elo_after: newFilmElo, p_opp_elo_after: newOppElo
+            )).execute()
         } catch {
-            Log.ranking.error("Choose upsert failed: \(String(describing: error), privacy: .public)")
+            Log.ranking.error("record_duel failed: \(String(describing: error), privacy: .public)")
+            duelError = "Couldn't save that pick. Check your connection and try again."
+            return
         }
+
+        pendingDuel = nil
+        filmElo = newFilmElo
+        pickTick += 1
+        comparisonCount += 1
 
         let idx = min((lo + hi) / 2, bucketItems.count - 1)
         if filmWon { hi = idx } else { lo = idx + 1 }
@@ -418,6 +438,14 @@ struct RankingView: View {
         .presentationBackgroundInteraction(.disabled)
         .onChange(of: vm.stage) { _, newStage in
             withAnimation(.easeInOut(duration: 0.3)) { selectedDetent = detent(for: newStage) }
+        }
+        .alert("Pick not saved", isPresented: Binding(
+            get: { vm.duelError != nil },
+            set: { if !$0 { vm.duelError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(vm.duelError ?? "")
         }
     }
 

@@ -267,6 +267,76 @@ create index on public.pop_likes (feed_event_id);
 create index on public.pop_comments (feed_event_id, created_at);
 
 -- ─────────────────────────────────────────────
+-- RECORD_DUEL
+-- Applies one "This or That" duel atomically: the match log row and both
+-- score updates succeed or fail together (a function body is one transaction).
+-- The client supplies p_match_id (a UUID it generates once per duel); if that
+-- match already exists the call is a no-op, so a network retry can never
+-- double-apply a duel. The user is always auth.uid(), never a parameter.
+-- SECURITY INVOKER (the default) keeps Row Level Security in force.
+-- Returns true if applied, false if p_match_id was already recorded.
+-- ─────────────────────────────────────────────
+create or replace function public.record_duel(
+  p_match_id         uuid,
+  p_film_tmdb_id     integer,
+  p_opp_tmdb_id      integer,
+  p_media_type       text,
+  p_film_won         boolean,
+  p_film_elo_before  numeric,
+  p_opp_elo_before   numeric,
+  p_film_elo_after   numeric,
+  p_opp_elo_after    numeric
+) returns boolean
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_inserted integer;
+begin
+  if v_user_id is null then
+    raise exception 'record_duel: not authenticated' using errcode = '28000';
+  end if;
+
+  insert into public.elo_matches (
+    id, user_id, winner_tmdb_id, loser_tmdb_id, media_type,
+    winner_elo_before, loser_elo_before, winner_elo_after, loser_elo_after
+  ) values (
+    p_match_id, v_user_id,
+    case when p_film_won then p_film_tmdb_id else p_opp_tmdb_id end,
+    case when p_film_won then p_opp_tmdb_id else p_film_tmdb_id end,
+    p_media_type,
+    case when p_film_won then p_film_elo_before else p_opp_elo_before end,
+    case when p_film_won then p_opp_elo_before else p_film_elo_before end,
+    case when p_film_won then p_film_elo_after else p_opp_elo_after end,
+    case when p_film_won then p_opp_elo_after else p_film_elo_after end
+  )
+  on conflict (id) do nothing;
+
+  get diagnostics v_inserted = row_count;
+  if v_inserted = 0 then
+    return false;
+  end if;
+
+  insert into public.ranked_items (user_id, tmdb_id, media_type, elo_score)
+  values (v_user_id, p_film_tmdb_id, p_media_type, p_film_elo_after)
+  on conflict (user_id, tmdb_id, media_type)
+  do update set elo_score = excluded.elo_score;
+
+  insert into public.ranked_items (user_id, tmdb_id, media_type, elo_score)
+  values (v_user_id, p_opp_tmdb_id, p_media_type, p_opp_elo_after)
+  on conflict (user_id, tmdb_id, media_type)
+  do update set elo_score = excluded.elo_score;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.record_duel(uuid, integer, integer, text, boolean, numeric, numeric, numeric, numeric) from public, anon;
+grant execute on function public.record_duel(uuid, integer, integer, text, boolean, numeric, numeric, numeric, numeric) to authenticated;
+
+-- ─────────────────────────────────────────────
 -- REALTIME
 -- Enable realtime on feed_events for live social feed
 -- ─────────────────────────────────────────────
