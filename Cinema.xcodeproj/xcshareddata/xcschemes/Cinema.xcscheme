@@ -50,6 +50,17 @@
                ReferencedContainer = "container:Cinema.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "531B8FC38C3412F3DC4A3C3E"
+               BuildableName = "CinemaTests.xctest"
+               BlueprintName = "CinemaTests"
+               ReferencedContainer = "container:Cinema.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

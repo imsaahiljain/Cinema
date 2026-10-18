@@ -21,6 +21,7 @@
 		3F42334E5A16E2DC2C1B98A6 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B8A564A01E418389F6CB0E8 /* AppState.swift */; };
 		4B798F0E6BB264BE4FAC2E88 /* LibreCaslonText-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3EF308B64CE30E426236C07C /* LibreCaslonText-Regular.ttf */; };
 		4FD7FC5889D63BB95AF2948A /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C83E1A7A3D9EE17085F23C6C /* RootView.swift */; };
+		55E42977B6B863C77070C69A /* ELOServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 505EE978675D2111A25EF72C /* ELOServiceTests.swift */; };
 		59606C18B058A3EA2FF7817C /* TMDBClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD02B3CF21F04A2669A89234 /* TMDBClient.swift */; };
 		5B44A725C520A94C18B799D3 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1981E84705ED6DF978BDCF98 /* Log.swift */; };
 		62B60CF815B02244008A7D43 /* CustomList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50EE58F15E8E30A0DF95BA66 /* CustomList.swift */; };
@@ -50,6 +51,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		1CF7205E5AA1CD039D3E8982 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CB65C5AAD396F27F893A18CE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 896EA45066AC4318412AC95D;
+			remoteInfo = Cinema;
+		};
 		7B5C445BE71D0C219A5B80D1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = CB65C5AAD396F27F893A18CE /* Project object */;
@@ -74,12 +82,14 @@
 		400E820CB0EC0231B9067CF3 /* GlassCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCard.swift; sourceTree = "<group>"; };
 		479F67E8B319479E66ACF14A /* DiagonalOverarchWinEffect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagonalOverarchWinEffect.swift; sourceTree = "<group>"; };
 		47C9836D650B8F37B4803907 /* LibreCaslonText-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "LibreCaslonText-Bold.ttf"; sourceTree = "<group>"; };
+		505EE978675D2111A25EF72C /* ELOServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ELOServiceTests.swift; sourceTree = "<group>"; };
 		50EE58F15E8E30A0DF95BA66 /* CustomList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomList.swift; sourceTree = "<group>"; };
 		530C7F0DB52CAC3077C9CD1F /* ListsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListsView.swift; sourceTree = "<group>"; };
 		5D21685CB405D619BE0A1A89 /* RankingPrototypeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingPrototypeView.swift; sourceTree = "<group>"; };
 		65258A723C1CD4E5EA116234 /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
 		716F3EF3F2B0C5963A9A3BA9 /* CinemaUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CinemaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		82ECD83DF5DBD40D16BCE440 /* NunitoSans-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "NunitoSans-Bold.ttf"; sourceTree = "<group>"; };
+		A230D5FCC74A73A13D7A5379 /* CinemaTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CinemaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A3BD8BDAB9CC17FD0B896A6D /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		A5D65343706BC8CD34661074 /* CinemaUser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaUser.swift; sourceTree = "<group>"; };
 		B00768B59A655BABAFB17CD6 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
@@ -126,6 +136,14 @@
 			path = Ranking;
 			sourceTree = "<group>";
 		};
+		11D79472A74B8B4B18269256 /* CinemaTests */ = {
+			isa = PBXGroup;
+			children = (
+				505EE978675D2111A25EF72C /* ELOServiceTests.swift */,
+			);
+			path = CinemaTests;
+			sourceTree = "<group>";
+		};
 		18176E01F4C56545E769E094 /* Services */ = {
 			isa = PBXGroup;
 			children = (
@@ -158,6 +176,7 @@
 			isa = PBXGroup;
 			children = (
 				E94966236921CC6C34C05081 /* Cinema.app */,
+				A230D5FCC74A73A13D7A5379 /* CinemaTests.xctest */,
 				716F3EF3F2B0C5963A9A3BA9 /* CinemaUITests.xctest */,
 			);
 			name = Products;
@@ -262,6 +281,7 @@
 			isa = PBXGroup;
 			children = (
 				920232A2223141FF5BE81F94 /* Cinema */,
+				11D79472A74B8B4B18269256 /* CinemaTests */,
 				3D18F4FC5CC7B3828D34EEBB /* CinemaUITests */,
 				4130B066D1F903B654A15128 /* Products */,
 			);
@@ -335,6 +355,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		531B8FC38C3412F3DC4A3C3E /* CinemaTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3373E37725E6E5E581D8AE85 /* Build configuration list for PBXNativeTarget "CinemaTests" */;
+			buildPhases = (
+				225F2BB90C33F410E5042CD0 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F080EA07798FE4F8791C650A /* PBXTargetDependency */,
+			);
+			name = CinemaTests;
+			packageProductDependencies = (
+			);
+			productName = CinemaTests;
+			productReference = A230D5FCC74A73A13D7A5379 /* CinemaTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		896EA45066AC4318412AC95D /* Cinema */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = D5C1A2D679A46BC38584060A /* Build configuration list for PBXNativeTarget "Cinema" */;
@@ -409,6 +447,7 @@
 			projectRoot = "";
 			targets = (
 				896EA45066AC4318412AC95D /* Cinema */,
+				531B8FC38C3412F3DC4A3C3E /* CinemaTests */,
 				C65110D96C331CA0AFAC0C37 /* CinemaUITests */,
 			);
 		};
@@ -431,6 +470,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		225F2BB90C33F410E5042CD0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				55E42977B6B863C77070C69A /* ELOServiceTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		40B04B72266EE99695C082D1 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -486,19 +533,38 @@
 			target = 896EA45066AC4318412AC95D /* Cinema */;
 			targetProxy = 7B5C445BE71D0C219A5B80D1 /* PBXContainerItemProxy */;
 		};
+		F080EA07798FE4F8791C650A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 896EA45066AC4318412AC95D /* Cinema */;
+			targetProxy = 1CF7205E5AA1CD039D3E8982 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		0DCA55B8FB0C0D78BDBAF3B6 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		11742BBC0EFF06E25E7F8A48 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mtgcardneeder.CinemaTests;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Cinema.app/Cinema";
 			};
 			name = Debug;
 		};
@@ -508,6 +574,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = PXH52A4CBY;
+				ENABLE_DEBUG_DYLIB = NO;
 				INFOPLIST_FILE = Cinema/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mtgcardneeder.Cinema;
@@ -525,12 +592,24 @@
 			};
 			name = Debug;
 		};
+		A063C7B5963B91196395D481 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mtgcardneeder.CinemaTests;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Cinema.app/Cinema";
+			};
+			name = Release;
+		};
 		C14CAC07E0CA81D8FC9F137F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = PXH52A4CBY;
+				ENABLE_DEBUG_DYLIB = NO;
 				INFOPLIST_FILE = Cinema/Resources/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mtgcardneeder.Cinema;
@@ -564,6 +643,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		3373E37725E6E5E581D8AE85 /* Build configuration list for PBXNativeTarget "CinemaTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				11742BBC0EFF06E25E7F8A48 /* Debug */,
+				A063C7B5963B91196395D481 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		9C5E538AEE7267778CD62D55 /* Build configuration list for PBXProject "Cinema" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
