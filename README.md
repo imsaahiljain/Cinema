@@ -48,7 +48,7 @@ Each duel writes a match row and updates two scores, and none of that should hal
 
 ## How it's built
 
-I built this with [Claude Code](https://claude.com/claude-code), working under a written engineering spec: [`CLAUDE.md`](CLAUDE.md). It records the architecture, product rules, design language, conventions, and the working agreement (one feature at a time, build and check in the simulator before calling it done). I made the product and design calls; Claude Code wrote much of the implementation under those rules.
+I designed and directed Popcorn, and built it with [Claude Code](https://claude.com/claude-code) as the implementation partner. I made the product decisions (the ranking model, the tier-then-duel flow, what the app should and shouldn't do), reviewed and tested each feature in the simulator and on my own phone, and steered the design through many rounds of feedback. [`CLAUDE.md`](CLAUDE.md) is the engineering spec that kept the work consistent: architecture, product rules, conventions, and a one-feature-at-a-time workflow with a build and verify step before anything is committed.
 
 ## Setup
 
