@@ -64,4 +64,84 @@ enum RatingFitter {
 
         return rating.mapValues { $0 * eloPerNat }
     }
+
+    // MARK: - Order-respecting scores
+
+    // A score band (Liked / Okay / Disliked). `center` is the prior mean for
+    // films in the band; a film's final score is kept inside [lower, upper).
+    struct Band: Hashable {
+        let lower: Double
+        let upper: Double
+        let center: Double
+    }
+
+    // Smallest gap kept between neighbouring films, so sorting by score
+    // reproduces `order` exactly instead of leaving ties.
+    static let minimumGap: Double = 0.5
+
+    // Scores for every film in `order` (best first) that (1) sort in exactly
+    // that order and (2) stay inside each film's band. The Bradley-Terry fit
+    // supplies the magnitudes; the order — which binary search placement and
+    // manual reordering own — is never up for revision. A film with no duels
+    // has no evidence to fit, so it keeps its `currentScores` value.
+    static func rate(
+        order: [Int],
+        currentScores: [Int: Double],
+        bands: [Int: Band],
+        matches: [Match]
+    ) -> [Int: Double] {
+        guard !order.isEmpty else { return [:] }
+
+        let fitted = fit(priors: bands.mapValues(\.center), matches: matches)
+        var withDuels = Set<Int>()
+        for match in matches { withDuels.insert(match.winner); withDuels.insert(match.loser) }
+
+        let target = order.map { id in
+            withDuels.contains(id) ? (fitted[id] ?? currentScores[id] ?? 0) : (currentScores[id] ?? fitted[id] ?? 0)
+        }
+
+        // Isotonic regression for "strictly descending by at least minimumGap":
+        // adding index * gap turns that into plain non-increasing, which
+        // pool-adjacent-violators solves exactly.
+        let gap = minimumGap
+        var h = nonIncreasingFit(target.enumerated().map { $0.element + Double($0.offset) * gap })
+
+        // Clamp each run of same-band films into its band. The clamp bounds are
+        // constant within a run and non-increasing across runs, so the order
+        // survives; the per-slot offsets keep the gaps strict at the band edge.
+        var start = 0
+        while start < order.count {
+            let band = bands[order[start]]
+            var end = start
+            while end + 1 < order.count, bands[order[end + 1]] == band { end += 1 }
+            if let band {
+                let count = Double(end - start + 1)
+                let lowerH = band.lower.isFinite ? band.lower + (count - 1 + Double(start)) * gap : -Double.infinity
+                let upperH = band.upper.isFinite ? band.upper - gap + Double(start) * gap : Double.infinity
+                if lowerH <= upperH {
+                    for i in start...end { h[i] = min(max(h[i], lowerH), upperH) }
+                }
+            }
+            start = end + 1
+        }
+
+        var result: [Int: Double] = [:]
+        for (i, id) in order.enumerated() { result[id] = h[i] - Double(i) * gap }
+        return result
+    }
+
+    private static func nonIncreasingFit(_ values: [Double]) -> [Double] {
+        var blocks: [(sum: Double, count: Int)] = []
+        for value in values {
+            blocks.append((value, 1))
+            while blocks.count > 1 {
+                let last = blocks[blocks.count - 1]
+                let previous = blocks[blocks.count - 2]
+                guard previous.sum / Double(previous.count) < last.sum / Double(last.count) else { break }
+                blocks.removeLast(2)
+                blocks.append((previous.sum + last.sum, previous.count + last.count))
+            }
+        }
+        return blocks.flatMap { block in Array(repeating: block.sum / Double(block.count), count: block.count) }
+    }
 }

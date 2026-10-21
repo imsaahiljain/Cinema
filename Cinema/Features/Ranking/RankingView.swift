@@ -48,6 +48,14 @@ enum RankBucket: CaseIterable {
         case .disliked: 1350
         }
     }
+
+    var band: RatingFitter.Band {
+        RatingFitter.Band(lower: lowerBound, upper: upperBound, center: startingElo)
+    }
+
+    static func containing(_ elo: Double) -> RankBucket {
+        allCases.first { elo >= $0.lowerBound && elo < $0.upperBound } ?? .okay
+    }
 }
 
 // MARK: - ViewModel
@@ -86,6 +94,9 @@ final class RankingViewModel {
     private var hi = 0
     private var filmElo: Double = 1500
     private var bucketItems: [RankedItem] = []
+    // Everything else the user has ranked, best first, as it stood before this
+    // film's duels moved any scores — the order the new film gets slotted into.
+    private var rankingBefore: [RankedItem] = []
     private var opponentItem: RankedItem?
     private var pendingDuel: (id: UUID, filmWon: Bool)?
     var duelError: String?
@@ -136,17 +147,19 @@ final class RankingViewModel {
         guard let userID, let bucket = chosenBucket else { return }
 
         do {
-            var query = SupabaseClient.shared
+            rankingBefore = try await SupabaseClient.shared
                 .from("ranked_items")
                 .select()
                 .eq("user_id", value: userID)
                 .eq("media_type", value: film.mediaType.rawValue)
                 .neq("tmdb_id", value: film.id)
-            if bucket.lowerBound.isFinite { query = query.gte("elo_score", value: bucket.lowerBound) }
-            if bucket.upperBound.isFinite { query = query.lt("elo_score", value: bucket.upperBound) }
-            bucketItems = try await query.order("elo_score", ascending: false).execute().value
+                .order("elo_score", ascending: false)
+                .execute().value
         } catch {
-            bucketItems = []
+            rankingBefore = []
+        }
+        bucketItems = rankingBefore.filter {
+            $0.eloScore >= bucket.lowerBound && $0.eloScore < bucket.upperBound
         }
 
         struct SeedUpsert: Encodable {
@@ -267,17 +280,11 @@ final class RankingViewModel {
         let bucketPosition = lo + 1
 
         var higherBandCount = 0
-        if let userID, let bucket = chosenBucket, bucket.upperBound.isFinite {
-            struct IDOnly: Decodable { let id: UUID }
-            let items: [IDOnly] = (try? await SupabaseClient.shared
-                .from("ranked_items").select("id")
-                .eq("user_id", value: userID)
-                .eq("media_type", value: film.mediaType.rawValue)
-                .gte("elo_score", value: bucket.upperBound)
-                .execute().value) ?? []
-            higherBandCount = items.count
+        if let bucket = chosenBucket, bucket.upperBound.isFinite {
+            higherBandCount = rankingBefore.filter { $0.eloScore >= bucket.upperBound }.count
         }
         overallPosition = higherBandCount + bucketPosition
+        if let userID { await refitScores(userID: userID, insertAt: overallPosition - 1) }
 
         if viaTooTough {
             flavorText = "Right in the mix."
@@ -317,6 +324,75 @@ final class RankingViewModel {
         }
 
         stage = .ranked
+    }
+
+    // Placement owns the order; this makes the stored scores agree with it. Every
+    // duel only nudged the two films in it, so by now the new film's score — and
+    // its opponents' — can sit out of step with the slot binary search picked.
+    // Refitting from the whole duel log fixes the magnitudes while the order
+    // (the pre-duel ranking with the new film inserted at its slot) stays fixed.
+    private func refitScores(userID: UUID, insertAt index: Int) async {
+        guard let bucket = chosenBucket else { return }
+
+        var order = rankingBefore.map(\.tmdbID)
+        order.insert(film.id, at: min(max(index, 0), order.count))
+
+        var currentScores = Dictionary(uniqueKeysWithValues: rankingBefore.map { ($0.tmdbID, $0.eloScore) })
+        currentScores[film.id] = filmElo
+        var bands = Dictionary(uniqueKeysWithValues: rankingBefore.map { ($0.tmdbID, RankBucket.containing($0.eloScore).band) })
+        bands[film.id] = bucket.band
+
+        do {
+            let matches = try await loadMatches(userID: userID)
+            let scores = RatingFitter.rate(order: order, currentScores: currentScores, bands: bands, matches: matches)
+
+            struct ScoreUpdate: Encodable {
+                let user_id: String
+                let tmdb_id: Int
+                let media_type: String
+                let elo_score: Double
+            }
+            let updates = scores.compactMap { id, score -> ScoreUpdate? in
+                guard abs(score - (currentScores[id] ?? .nan)) > 0.001 else { return nil }
+                return ScoreUpdate(user_id: userID.uuidString, tmdb_id: id, media_type: film.mediaType.rawValue, elo_score: score)
+            }
+            if !updates.isEmpty {
+                try await SupabaseClient.shared.from("ranked_items")
+                    .upsert(updates, onConflict: "user_id,tmdb_id,media_type")
+                    .execute()
+            }
+            if let fitted = scores[film.id] { filmElo = fitted }
+        } catch {
+            Log.ranking.error("Score refit failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    // PostgREST caps a response at 1,000 rows by default, so page through the log.
+    private func loadMatches(userID: UUID) async throws -> [RatingFitter.Match] {
+        struct Row: Decodable {
+            let winnerTmdbID: Int
+            let loserTmdbID: Int
+            enum CodingKeys: String, CodingKey {
+                case winnerTmdbID = "winner_tmdb_id"
+                case loserTmdbID = "loser_tmdb_id"
+            }
+        }
+        let pageSize = 1000
+        var matches: [RatingFitter.Match] = []
+        var offset = 0
+        while true {
+            let rows: [Row] = try await SupabaseClient.shared
+                .from("elo_matches")
+                .select("winner_tmdb_id, loser_tmdb_id")
+                .eq("user_id", value: userID)
+                .eq("media_type", value: film.mediaType.rawValue)
+                .order("created_at", ascending: true)
+                .range(from: offset, to: offset + pageSize - 1)
+                .execute().value
+            matches += rows.map { RatingFitter.Match(winner: $0.winnerTmdbID, loser: $0.loserTmdbID) }
+            if rows.count < pageSize { return matches }
+            offset += pageSize
+        }
     }
 
     // Attaches the caption the user wrote on the result screen to the pop
