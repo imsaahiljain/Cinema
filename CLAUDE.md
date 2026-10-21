@@ -12,7 +12,7 @@ The codebase internals still say **Cinema**: Xcode project/scheme name, bundle I
 `Docs/polish-log.md` tracks the small "give it personality" UI/UX details worth referencing later for marketing content — color-coded scores, gamified unlocks, signature interactions, that kind of thing. Not a full changelog (git history covers that); only the deliberate, opinionated touches. Add an entry (newest on top) whenever one of these gets decided or built, even if it hasn't been implemented yet — mark undecided/unbuilt ones `*(decided, not yet built)*` and update once shipped.
 
 ## Open Action Items (things only the user can do — check this whenever asked "any action items left?")
-- ~~Apple Developer Team ID~~ — done. User's Xcode account has a free Personal Team, `PXH52A4CBY` ("Saahil Jain (Personal Team)"), now set as `DEVELOPMENT_TEAM` in `project.yml` with `CODE_SIGN_STYLE: Automatic`. Physical device (Saahil Jain's iPhone, an iPhone 17,5) is paired and shows up in both `xcrun devicectl list devices` and `xcrun xctrace list devices`. Personal Team signing means installed builds need re-signing every 7 days — if a device build stops launching after a week of inactivity, that's why; just rebuild and reinstall.
+- ~~Apple Developer Team ID~~ — done. User's Xcode account has a free Personal Team, `<team-id>` (a free Personal Team), now set as `DEVELOPMENT_TEAM` in `project.yml` with `CODE_SIGN_STYLE: Automatic`. Physical device (the user's iPhone, an iPhone 17,5) is paired and shows up in both `xcrun devicectl list devices` and `xcrun xctrace list devices`. Personal Team signing means installed builds need re-signing every 7 days — if a device build stops launching after a week of inactivity, that's why; just rebuild and reinstall.
 - ~~Supabase Personal Access Token~~ — done, saved at `~/.supabase/access-token` (outside the repo, never committed). Verified working against `api.supabase.com/v1/projects`.
 - **Supabase `service_role` key** — still not held. Only needed for admin-level data operations that bypass Row Level Security; the PAT above covers schema/project-config changes. From the project's Settings → API in the Supabase dashboard, if it ever comes up.
 
@@ -112,7 +112,7 @@ Cinema/
 These live in `Cinema/Core/Network/Secrets.swift`, which is gitignored and **does not exist in a fresh checkout** — it has to be recreated by hand on every new machine. Format:
 ```swift
 enum Secrets {
-    static let supabaseURL = "https://anvgcmahgudiojnrfzku.supabase.co"
+    static let supabaseURL = "https://<your-project-ref>.supabase.co"
     static let supabaseAnonKey = "..."
     static let tmdbReadAccessToken = "..."
     static let qaEmail = "..."      // DEBUG auto-sign-in + UI tests
@@ -127,7 +127,7 @@ If it's missing, the app will not compile (`Secrets.supabaseURL` etc. won't reso
 3. **`gh` (GitHub CLI) is installed** at `~/.local/bin/gh` but not authenticated — nothing in the current workflow needs it (commits push straight to `main`, no PR/issue workflow). Run `gh auth login` only if that changes.
 4. Simulator is the default target for day-to-day work (no Apple Developer Team needed — `DEVELOPMENT_TEAM: ""` and unsigned builds work fine for `platform=iOS Simulator` destinations). Physical-device builds need a real Team ID in `project.yml`, which hasn't been set up yet — ask the user for it (Xcode → Settings → Accounts, or developer.apple.com → Membership) only when device testing actually becomes necessary.
 5. Supabase: schema already applied to the live project (`Docs/schema.sql` is the source of truth if it ever needs reapplying). The project can get **paused** on the free tier — if API calls start failing with DNS/connection errors, that's the first thing to check; the user has to click "Restore" in the Supabase dashboard, it doesn't self-resume. A Personal Access Token for the Management API is saved at `~/.supabase/access-token`.
-6. `git remote` uses SSH (`git@github.com:imsaahiljain/Cinema.git`), not HTTPS — an SSH key is already set up and added to the GitHub account. If push ever fails with a credential error on a new machine, generate a new `ed25519` key and have the user add it at github.com/settings/ssh/new.
+6. `git remote` uses SSH (`git@github.com:<user>/Cinema.git`), not HTTPS — an SSH key is already set up and added to the GitHub account. If push ever fails with a credential error on a new machine, generate a new `ed25519` key and have the user add it at github.com/settings/ssh/new.
 
 ## Coding Conventions
 - One `@Observable` ViewModel per feature screen
@@ -166,7 +166,7 @@ This is much faster than driving the full 12-step onboarding flow (with real Con
 
 **Schema/project-admin work (DDL changes, auth config)** — use the Supabase Management API with the Personal Access Token stored at `~/.supabase/access-token` (outside the repo, gitignored-equivalent — never commit it):
 ```bash
-curl -s "https://api.supabase.com/v1/projects/anvgcmahgudiojnrfzku/..." \
+curl -s "https://api.supabase.com/v1/projects/<your-project-ref>/..." \
   -H "Authorization: Bearer $(cat ~/.supabase/access-token)"
 ```
 The project's `service_role` key (bypasses Row Level Security for admin-level *data* operations, separate from the PAT which is for project/account-level management) is not held — ask the user for it (Settings → API in the dashboard) if that specific need comes up.
@@ -197,7 +197,7 @@ Two equivalent paths — pick whichever fits the turn:
 
 **The simulator tool's own build action** — headless, non-blocking, good when the rest of the turn is also simulator-tool calls:
 ```
-mcp__Claude_Code_iOS_Simulator__build({action: "build", project_path: "/Users/saahiljain/Documents/Popcorn IOS/Cinema.xcodeproj", scheme: "Cinema", device: "iPhone 17"})
+mcp__Claude_Code_iOS_Simulator__build({action: "build", project_path: "<repo>/Cinema.xcodeproj", scheme: "Cinema", device: "iPhone 17"})
 → returns a build_id immediately
 mcp__Claude_Code_iOS_Simulator__build({action: "build_status", build_id: "..."})
 → poll this; on success it returns the built .app path plus a ready-to-paste launch call
@@ -248,10 +248,10 @@ Run it in the background piped to a log file, and screenshot only once the log s
 Known gap: the main tab bar's buttons have no explicit `.accessibilityLabel()`, so XCUITest sees them by raw SF Symbol name (e.g. `"Numbered List"` instead of `"Lists"`). Worth a one-line fix next time that file is touched.
 
 ### Physical device — unchanged, the simulator tool doesn't reach here
-The iOS Simulator tool is simulator-only. The paired physical device (Saahil Jain's iPhone) still goes through `xcrun devicectl`:
+The iOS Simulator tool is simulator-only. The paired physical device (the user's iPhone) still goes through `xcrun devicectl`:
 ```bash
 xcodebuild -scheme Cinema -project Cinema.xcodeproj \
-  -destination 'platform=iOS,name=Saahil Jain’s iPhone' \
+  -destination 'platform=iOS,name=<device name>' \
   -derivedDataPath /tmp/Cinema_build_device build
 xcrun devicectl device install app --device <udid> /tmp/Cinema_build_device/Build/Products/Debug-iphoneos/Cinema.app
 xcrun devicectl device process launch --device <udid> com.mtgcardneeder.Cinema

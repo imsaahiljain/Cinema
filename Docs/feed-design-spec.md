@@ -126,7 +126,7 @@ This is the section most likely to be wrong on first guess — per the methodolo
 Per the app's existing working style (one feature at a time, verify before moving on):
 
 1. Prototype `BattlePopCard` + the scaled win-effect reuse against **mock data only**, in an isolated preview/harness — no Supabase writes, no real feed query — same pattern as `RankingPrototypeView.swift` already in the repo.
-2. Hand-test the reveal + reaction-sticker haptic on the physical device (`Saahil Jain's iPhone`) before agreeing the motion is right.
+2. Hand-test the reveal + reaction-sticker haptic on the physical device (a physical iPhone) before agreeing the motion is right.
 3. Only after that's approved: wire real data (`feed_events` table, already in schema) and the real Feed tab entry point, plus the Recommendation-pop → RankingView hookup described in §4.
 4. Milestone and Recommendation pop cards follow the same card shell but are lower motion-risk (no custom haptic-timed animation) — fine to build directly against real data once the battle-pop pattern is validated.
 
