@@ -42,7 +42,7 @@ final class AppState {
     // in Release, so this never reaches a real build.
     private func debugAutoSignIn() async {
         do {
-            try await SupabaseClient.shared.auth.signIn(email: "qatest1@example.com", password: "TestPass123")
+            try await SupabaseClient.shared.auth.signIn(email: Secrets.qaEmail, password: Secrets.qaPassword)
             let session = try await SupabaseClient.shared.auth.session
             isAuthenticated = true
             await loadUser(id: session.user.id)

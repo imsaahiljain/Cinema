@@ -33,8 +33,8 @@ final class CinemaUITests: XCTestCase {
         let loginLink = app.buttons["Already have an account? Log in"]
         guard loginLink.waitForExistence(timeout: 5) else { return } // already-authenticated session
         loginLink.tap()
-        type("qatest1@example.com", into: app.textFields["Email"])
-        type("TestPass123", into: app.secureTextFields["Password"])
+        type(Secrets.qaEmail, into: app.textFields["Email"])
+        type(Secrets.qaPassword, into: app.secureTextFields["Password"])
         let signIn = app.buttons["Sign In"]
         XCTAssertTrue(signIn.waitForExistence(timeout: 10))
         signIn.tap()

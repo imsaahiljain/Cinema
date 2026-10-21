@@ -22,6 +22,7 @@
 		4B798F0E6BB264BE4FAC2E88 /* LibreCaslonText-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3EF308B64CE30E426236C07C /* LibreCaslonText-Regular.ttf */; };
 		4FD7FC5889D63BB95AF2948A /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C83E1A7A3D9EE17085F23C6C /* RootView.swift */; };
 		55E42977B6B863C77070C69A /* ELOServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 505EE978675D2111A25EF72C /* ELOServiceTests.swift */; };
+		5720602E91F5CE86609356EE /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3BD8BDAB9CC17FD0B896A6D /* Secrets.swift */; };
 		59606C18B058A3EA2FF7817C /* TMDBClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD02B3CF21F04A2669A89234 /* TMDBClient.swift */; };
 		5B44A725C520A94C18B799D3 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1981E84705ED6DF978BDCF98 /* Log.swift */; };
 		62B60CF815B02244008A7D43 /* CustomList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50EE58F15E8E30A0DF95BA66 /* CustomList.swift */; };
@@ -490,6 +491,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				39336CA923FDB0EEF05F3570 /* CinemaUITests.swift in Sources */,
+				5720602E91F5CE86609356EE /* Secrets.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -85,6 +85,7 @@ targets:
     deploymentTarget: "26.0"
     sources:
       - path: CinemaUITests
+      - path: Cinema/Core/Network/Secrets.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mtgcardneeder.CinemaUITests

@@ -115,6 +115,8 @@ enum Secrets {
     static let supabaseURL = "https://anvgcmahgudiojnrfzku.supabase.co"
     static let supabaseAnonKey = "..."
     static let tmdbReadAccessToken = "..."
+    static let qaEmail = "..."      // DEBUG auto-sign-in + UI tests
+    static let qaPassword = "..."
 }
 ```
 If it's missing, the app will not compile (`Secrets.supabaseURL` etc. won't resolve). Ask the user for the values, or check whether they've already dropped the file somewhere odd (this has happened before — it once landed in the wrong folder entirely).
@@ -230,7 +232,7 @@ control({action: "button", name: "HOME"})                       # background the
 6. Tap once, then immediately take a fresh screenshot before doing anything else. Never chain a second blind tap off an assumed result.
 7. If a tap visibly misses, don't retry with another guess — go back to step 2 with a brand-new screenshot.
 
-**State persists between launches.** The simulator keeps the app's install and its Supabase session across relaunches, so there's normally no need to re-run any login flow — whatever account was last signed in (usually the seeded QA account, `qatest1@example.com` / `TestPass123`) is still signed in the next time you attach. Only sign in again if the simulator itself was erased.
+**State persists between launches.** The simulator keeps the app's install and its Supabase session across relaunches, so there's normally no need to re-run any login flow — whatever account was last signed in (usually the seeded QA account — its credentials live in the gitignored `Secrets.swift` as `Secrets.qaEmail` / `Secrets.qaPassword`) is still signed in the next time you attach. Only sign in again if the simulator itself was erased.
 
 ### When to still reach for XCUITest
 One real, confirmed gap: `touch_path` (the tool's smooth multi-point drag) did not reliably trigger the This-or-That screen's SwiftUI `DragGesture`-based swipe-to-pick, across several attempts with different start points, speeds, and durations — while XCUITest's `press(forDuration:thenDragTo:)` reliably does commit a pick the same way. `CinemaUITests/CinemaUITests.swift` stays in the project for exactly this category of check — a custom drag/gesture interaction the simulator tool's synthesized touch events don't seem to reach — not for navigation, taps, typing, or general verification, all of which the simulator tool now handles in a couple seconds instead of the old 60–90 second edit-test/rebuild/replay-from-login loop.
