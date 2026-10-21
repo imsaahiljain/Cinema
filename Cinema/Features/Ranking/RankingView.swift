@@ -223,7 +223,8 @@ final class RankingViewModel {
         }
 
         // Reused across retries of the same pick so a request that actually landed
-        // but whose response was lost can't be applied a second time.
+        // but whose response was lost is a no-op if re-sent. (The UI can't
+        // currently retry; see README Known limitations.)
         let matchID: UUID
         if let pending = pendingDuel, pending.filmWon == filmWon {
             matchID = pending.id

@@ -275,8 +275,10 @@ create index on public.pop_comments (feed_event_id, created_at);
 -- Applies one "This or That" duel atomically: the match log row and both
 -- score updates succeed or fail together (a function body is one transaction).
 -- The client supplies p_match_id (a UUID it generates once per duel); if that
--- match already exists the call is a no-op, so a network retry can never
--- double-apply a duel. The user is always auth.uid(), never a parameter.
+-- match already exists the call is a no-op, so re-sending a call with the same
+-- p_match_id never applies it twice. A retry only uses the same ID if the
+-- client reuses it (see README Known limitations). The user is always
+-- auth.uid(), never a parameter.
 -- SECURITY INVOKER (the default) keeps Row Level Security in force.
 -- Returns true if applied, false if p_match_id was already recorded.
 -- ─────────────────────────────────────────────
