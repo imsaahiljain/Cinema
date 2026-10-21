@@ -31,6 +31,7 @@
 		757B0081B953C48892A4550E /* ShareCardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3C22225DAE6B21AC19378F /* ShareCardService.swift */; };
 		77EC1A99DEF36338EEB17EBC /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 083082767AFFFA05A82D3F8A /* SupabaseClient.swift */; };
 		7C4CA3F23C3A5C425A37375D /* GlassCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400E820CB0EC0231B9067CF3 /* GlassCard.swift */; };
+		8048D5DFDFE1306520034E03 /* RatingFitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0203CBB80910D964F8744E7C /* RatingFitter.swift */; };
 		8209A44BA41B65508968E11A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C938C3BDAD6776A47E6C5A38 /* Assets.xcassets */; };
 		857EA269A7043EA70B9E0568 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00768B59A655BABAFB17CD6 /* ProfileView.swift */; };
 		8C59F2482E91C6BC6203B102 /* AddToListSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10A05020314D0E674DC0C36 /* AddToListSheet.swift */; };
@@ -48,6 +49,7 @@
 		F59F9E00678E8E9D5187B03E /* CinemaUser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5D65343706BC8CD34661074 /* CinemaUser.swift */; };
 		F83DEF400F2F1332CC8E640D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2897154F9235706C8E36A22 /* OnboardingView.swift */; };
 		FD58D6D5301ACC480E449A99 /* CinemaTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19B6FE300EFDFCFD23526BD3 /* CinemaTheme.swift */; };
+		FFD0E7601A14EC5E55627E9D /* RatingFitterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FB51010812E36895E71959E /* RatingFitterTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -68,6 +70,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0203CBB80910D964F8744E7C /* RatingFitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingFitter.swift; sourceTree = "<group>"; };
 		06B73F937BD0A805881C7560 /* FeedPrototypeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedPrototypeView.swift; sourceTree = "<group>"; };
 		083082767AFFFA05A82D3F8A /* SupabaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseClient.swift; sourceTree = "<group>"; };
 		0DF633982F3A20D7E1103DB9 /* MovieInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovieInfoView.swift; sourceTree = "<group>"; };
@@ -79,6 +82,7 @@
 		346682FA060F15CE0C72B7BF /* RankingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingView.swift; sourceTree = "<group>"; };
 		37109B718B53FD6EB359A77C /* CinemaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaApp.swift; sourceTree = "<group>"; };
 		3EF308B64CE30E426236C07C /* LibreCaslonText-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "LibreCaslonText-Regular.ttf"; sourceTree = "<group>"; };
+		3FB51010812E36895E71959E /* RatingFitterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingFitterTests.swift; sourceTree = "<group>"; };
 		400E820CB0EC0231B9067CF3 /* GlassCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCard.swift; sourceTree = "<group>"; };
 		479F67E8B319479E66ACF14A /* DiagonalOverarchWinEffect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagonalOverarchWinEffect.swift; sourceTree = "<group>"; };
 		47C9836D650B8F37B4803907 /* LibreCaslonText-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "LibreCaslonText-Bold.ttf"; sourceTree = "<group>"; };
@@ -140,6 +144,7 @@
 			isa = PBXGroup;
 			children = (
 				505EE978675D2111A25EF72C /* ELOServiceTests.swift */,
+				3FB51010812E36895E71959E /* RatingFitterTests.swift */,
 			);
 			path = CinemaTests;
 			sourceTree = "<group>";
@@ -148,6 +153,7 @@
 			isa = PBXGroup;
 			children = (
 				D937843E51844F3C60087C3C /* ELOService.swift */,
+				0203CBB80910D964F8744E7C /* RatingFitter.swift */,
 				DA3C22225DAE6B21AC19378F /* ShareCardService.swift */,
 			);
 			path = Services;
@@ -475,6 +481,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				55E42977B6B863C77070C69A /* ELOServiceTests.swift in Sources */,
+				FFD0E7601A14EC5E55627E9D /* RatingFitterTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -514,6 +521,7 @@
 				857EA269A7043EA70B9E0568 /* ProfileView.swift in Sources */,
 				38C68A492E7B13910AA386D4 /* RankingPrototypeView.swift in Sources */,
 				0882FC922D15144F6CAE4C9C /* RankingView.swift in Sources */,
+				8048D5DFDFE1306520034E03 /* RatingFitter.swift in Sources */,
 				4FD7FC5889D63BB95AF2948A /* RootView.swift in Sources */,
 				26357C71D51E0F5A3D9D1CF6 /* SearchConfig.swift in Sources */,
 				71F4E38D958B04CF4095E790 /* SearchView.swift in Sources */,
