@@ -186,7 +186,11 @@ final class RankingViewModel {
                 onConflict: "user_id,tmdb_id,media_type"
             ).execute()
         } catch {
+            // record_duel would otherwise create this row with is_private = false,
+            // silently making a Stealth ranking public.
             Log.ranking.error("Seed upsert failed: \(String(describing: error), privacy: .public)")
+            duelError = "Couldn't save your ranking. Check your connection and try again."
+            return
         }
 
         lo = 0; hi = bucketItems.count

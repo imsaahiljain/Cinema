@@ -152,6 +152,8 @@ git push origin main
 Never add: `supabase/` (local CLI artifacts), `Cinema.xcodeproj/xcuserdata/`, `.DS_Store`, `Cinema/Core/Network/Secrets.swift` (all already gitignored — this is just a reminder of what NOT to force-add).
 
 ## Supabase Workflow (Claude must follow this)
+**`ranked_items` reads are RLS-filtered on `is_private`** (policy "Public or own ranked items are readable": `not is_private or auth.uid() = user_id`). Another user's Stealth-mode films never come back from any query, so rank/count math over a friend's rows only sees their public films. A failed seed upsert in `RankingViewModel.proceedToRanking` aborts the ranking so `record_duel` can't create the row as public.
+
 Never ask the user to touch the Supabase dashboard for routine work. **The Supabase CLI is not installed on this Mac and should not be assumed to be** (a prior version of this doc assumed it was linked — it wasn't, on this machine). Two working paths instead, both plain `curl`, no install needed:
 
 **Data-level work (create test users, seed rows, query tables)** — use the REST API with the anon key from `Secrets.swift`:

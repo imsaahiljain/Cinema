@@ -49,8 +49,12 @@ create table public.ranked_items (
 
 alter table public.ranked_items enable row level security;
 
-create policy "Anyone can read ranked items"
-  on public.ranked_items for select using (true);
+-- Private (Stealth mode) rows are readable only by their owner; enforced here,
+-- not just by what the UI chooses to show.
+drop policy if exists "Anyone can read ranked items" on public.ranked_items;
+create policy "Public or own ranked items are readable"
+  on public.ranked_items for select
+  using (not is_private or auth.uid() = user_id);
 
 create policy "Users can manage own ranked items"
   on public.ranked_items for all using (auth.uid() = user_id);
