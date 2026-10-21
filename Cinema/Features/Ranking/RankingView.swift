@@ -84,7 +84,6 @@ final class RankingViewModel {
 
     private var lo = 0
     private var hi = 0
-    private var comparisonCount = 0
     private var filmElo: Double = 1500
     private var bucketItems: [RankedItem] = []
     private var opponentItem: RankedItem?
@@ -177,7 +176,7 @@ final class RankingViewModel {
             Log.ranking.error("Seed upsert failed: \(String(describing: error), privacy: .public)")
         }
 
-        lo = 0; hi = bucketItems.count; comparisonCount = 0
+        lo = 0; hi = bucketItems.count
         if bucketItems.isEmpty {
             await finish(userID: userID)
         } else {
@@ -244,11 +243,10 @@ final class RankingViewModel {
         pendingDuel = nil
         filmElo = newFilmElo
         pickTick += 1
-        comparisonCount += 1
 
         let idx = min((lo + hi) / 2, bucketItems.count - 1)
         if filmWon { hi = idx } else { lo = idx + 1 }
-        if lo >= hi || comparisonCount >= 4 {
+        if lo >= hi {
             await finish(userID: userID)
         } else {
             await loadOpponent()
