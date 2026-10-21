@@ -71,3 +71,7 @@ Requires Xcode 26+ and an iOS 26 simulator.
 6. Open `Cinema.xcodeproj`, choose the `Cinema` scheme and an iPhone simulator, and run. Run unit tests with ⌘U.
 
 Movie data is provided by TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.
+
+## License
+
+All rights reserved. The code is public for viewing and evaluation only; see [LICENSE](LICENSE).
